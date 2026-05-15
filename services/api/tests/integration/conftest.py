@@ -4,22 +4,24 @@ Run via `pytest tests/integration` in CI; skipped silently if no DB URL is set.
 """
 from __future__ import annotations
 
-import asyncio
 import os
 import tempfile
 import uuid
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import Iterator
 from pathlib import Path
 
+import psycopg
 import pytest
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import command
 
 INTEGRATION_DB_URL = os.environ.get("INTEGRATION_DATABASE_URL")
+
+
+def _sync_url(async_url: str) -> str:
+    return async_url.replace("+asyncpg", "")
 
 
 def pytest_collection_modifyitems(
@@ -52,7 +54,6 @@ def _migrate() -> Iterator[None]:
     os.environ["STORAGE_LOCAL_PATH"] = storage_dir
     os.environ["DEV_AUTH_BYPASS"] = "true"
     os.environ["MODEL_GATEWAY_BACKEND"] = "stub"
-    # bust cached Settings so the env above takes effect
     from app.config import get_settings
 
     get_settings.cache_clear()
@@ -64,28 +65,37 @@ def _migrate() -> Iterator[None]:
 
 
 @pytest.fixture()
-async def db_clean() -> AsyncIterator[None]:
-    """Truncate all data tables between tests."""
+def _db_clean() -> None:
+    """Truncate all data tables between tests using a synchronous driver.
+
+    Synchronous on purpose: avoids creating async engines bound to a
+    test-local event loop that gets closed before the engine is disposed.
+    """
     assert INTEGRATION_DB_URL
-    engine = create_async_engine(INTEGRATION_DB_URL, future=True)
-    async with engine.begin() as conn:
-        await conn.execute(
-            text(
-                "TRUNCATE TABLE outfit_events, outfit_items, outfits, item_corrections, "
-                "wardrobe_items, kid_consents, family_members, style_profiles, users "
-                "RESTART IDENTITY CASCADE"
-            )
+    with psycopg.connect(_sync_url(INTEGRATION_DB_URL), autocommit=True) as conn:
+        conn.execute(
+            "TRUNCATE TABLE outfit_events, outfit_items, outfits, item_corrections, "
+            "wardrobe_items, kid_consents, family_members, style_profiles, users "
+            "RESTART IDENTITY CASCADE"
         )
-    await engine.dispose()
-    yield
 
 
 @pytest.fixture()
-def client(db_clean: None) -> Iterator[TestClient]:
+def client(_db_clean: None) -> Iterator[TestClient]:
+    """Fresh TestClient per test. We dispose the app's async engine afterwards so
+    the next test's TestClient (with its own event loop) gets a clean pool."""
+    import asyncio
+
+    from app import db as db_module
     from app.main import app
 
     with TestClient(app) as c:
         yield c
+
+    async def _dispose() -> None:
+        await db_module.engine.dispose()
+
+    asyncio.run(_dispose())
 
 
 @pytest.fixture()
@@ -96,10 +106,3 @@ def guardian_id() -> str:
 @pytest.fixture()
 def auth_headers(guardian_id: str) -> dict[str, str]:
     return {"X-Dev-User-Id": guardian_id}
-
-
-@pytest.fixture(scope="session")
-def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
