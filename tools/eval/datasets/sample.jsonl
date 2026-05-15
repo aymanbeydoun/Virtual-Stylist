@@ -1,0 +1,12 @@
+{"image": "images/blouse_navy_stripe.jpg", "category": "womens.tops.blouse", "pattern": "stripe", "primary_color": "navy", "formality": 6, "seasonality": ["spring", "fall"]}
+{"image": "images/tshirt_white.jpg", "category": "mens.tops.tshirt", "pattern": "solid", "primary_color": "white", "formality": 2, "seasonality": ["spring", "summer", "fall"]}
+{"image": "images/jeans_dark.jpg", "category": "womens.bottoms.jeans", "pattern": "solid", "primary_color": "indigo", "formality": 4, "seasonality": ["spring", "fall", "winter"]}
+{"image": "images/chinos_khaki.jpg", "category": "mens.bottoms.chinos", "pattern": "solid", "primary_color": "khaki", "formality": 5, "seasonality": ["spring", "fall"]}
+{"image": "images/sneaker_white.jpg", "category": "womens.shoes.sneaker", "pattern": "solid", "primary_color": "white", "formality": 3, "seasonality": ["spring", "summer", "fall"]}
+{"image": "images/stiletto_black.jpg", "category": "womens.shoes.stiletto", "pattern": "solid", "primary_color": "black", "formality": 8, "seasonality": ["spring", "summer", "fall", "winter"]}
+{"image": "images/loafer_brown.jpg", "category": "mens.shoes.loafer", "pattern": "solid", "primary_color": "brown", "formality": 7, "seasonality": ["spring", "fall"]}
+{"image": "images/fedora_grey.jpg", "category": "mens.accessories.fedora", "pattern": "solid", "primary_color": "grey", "formality": 6, "seasonality": ["fall", "winter"]}
+{"image": "images/kid_tee_dino.jpg", "category": "kids.tops.graphic_tee", "pattern": "graphic", "primary_color": "blue", "formality": 1, "seasonality": ["spring", "summer"]}
+{"image": "images/kid_shorts_red.jpg", "category": "kids.bottoms.shorts", "pattern": "solid", "primary_color": "red", "formality": 1, "seasonality": ["spring", "summer"]}
+{"image": "images/midi_floral.jpg", "category": "womens.dresses.midi", "pattern": "floral", "primary_color": "pink", "formality": 7, "seasonality": ["spring", "summer"]}
+{"image": "images/belt_black.jpg", "category": "accessories.belts.leather", "pattern": "solid", "primary_color": "black", "formality": 6, "seasonality": ["spring", "summer", "fall", "winter"]}

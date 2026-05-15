@@ -1,0 +1,47 @@
+# Node
+node_modules/
+.pnpm-store/
+dist/
+.expo/
+.expo-shared/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.uv-cache/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# Build
+build/
+ios/
+android/
+*.aab
+*.apk
+*.ipa
+
+# Logs
+*.log
+logs/
+
+# Local artifacts
+storage/

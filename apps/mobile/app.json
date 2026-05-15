@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Virtual Stylist",
+    "slug": "virtual-stylist",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "virtualstylist",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#0f172a"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.virtualstylist.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Photograph your wardrobe to build your digital closet.",
+        "NSPhotoLibraryUsageDescription": "Import wardrobe photos from your library."
+      }
+    },
+    "android": {
+      "package": "com.virtualstylist.app"
+    },
+    "plugins": [
+      "expo-image-picker",
+      "expo-secure-store"
+    ],
+    "extra": {
+      "apiUrl": "http://localhost:8000"
+    }
+  }
+}
