@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import family, health, stylist, wardrobe
 from app.config import get_settings
+from app.core.rate_limit import RateLimitExceeded, limiter, rate_limit_exceeded_handler
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -14,6 +15,9 @@ app = FastAPI(
     openapi_url="/api/v1/openapi.json",
     docs_url="/api/v1/docs",
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,

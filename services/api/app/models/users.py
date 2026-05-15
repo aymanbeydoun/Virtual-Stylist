@@ -1,14 +1,16 @@
 import enum
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, DateTime, Enum, SmallInteger, String, Text
+from sqlalchemy import DateTime, Enum, SmallInteger, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.json_types import PydanticJSON
 from app.models.base import Base, created_at_col, updated_at_col
+from app.schemas.common import SizeMap
 
 if TYPE_CHECKING:
     from app.models.family import FamilyMember
@@ -66,7 +68,9 @@ class StyleProfile(Base):
     owner_kind: Mapped[OwnerKind] = mapped_column(Enum(OwnerKind, name="owner_kind"))
     owner_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
 
-    sizes: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    sizes: Mapped[SizeMap] = mapped_column(
+        PydanticJSON(SizeMap), default=lambda: SizeMap(root={})
+    )
     style_vector: Mapped[list[float] | None] = mapped_column(Vector(768))
     preferred_colors: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     disliked_categories: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)

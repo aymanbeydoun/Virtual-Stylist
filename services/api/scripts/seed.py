@@ -27,6 +27,7 @@ from app.models import Base, FamilyMember, KidConsent, User, WardrobeItem
 from app.models.family import ConsentMethod, FamilyMemberKind
 from app.models.users import OwnerKind, UserRole
 from app.models.wardrobe import Pattern
+from app.schemas.common import ColorTag, ConfidenceScores
 
 GUARDIAN_ID = uuid.UUID("11111111-1111-1111-1111-111111111111")
 KID_ID = uuid.UUID("22222222-2222-2222-2222-222222222222")
@@ -145,12 +146,14 @@ async def seed() -> None:
                         thumbnail_key=key,
                         category=category,
                         pattern=pattern,
-                        colors=[{"name": color_name, "hex": hex_color, "weight": 1.0}],
+                        colors=[ColorTag(name=color_name, hex=hex_color, weight=1.0)],
                         formality=formality,
                         seasonality=seasons,
                         coppa_protected=owner_kind == OwnerKind.family_member,
                         status="ready",
-                        confidence_scores={"category": 1.0, "pattern": 1.0, "color": 1.0},
+                        confidence_scores=ConfidenceScores(
+                            root={"category": 1.0, "pattern": 1.0, "color": 1.0}
+                        ),
                     )
                 )
             return len(closet)

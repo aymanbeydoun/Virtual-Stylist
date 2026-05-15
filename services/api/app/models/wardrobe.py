@@ -1,15 +1,16 @@
 import enum
 import uuid
 from datetime import datetime
-from typing import Any
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, SmallInteger, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, SmallInteger, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.json_types import PydanticJSON
 from app.models.base import Base, created_at_col
 from app.models.users import OwnerKind
+from app.schemas.common import ColorTag, ConfidenceScores
 
 
 class Pattern(enum.StrEnum):
@@ -36,14 +37,18 @@ class WardrobeItem(Base):
 
     category: Mapped[str | None] = mapped_column(String(120), index=True)
     subcategory_path: Mapped[str | None] = mapped_column(String(255))
-    colors: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    colors: Mapped[list[ColorTag]] = mapped_column(
+        PydanticJSON(list[ColorTag]), default=list
+    )
     pattern: Mapped[Pattern | None] = mapped_column(Enum(Pattern, name="pattern"))
     formality: Mapped[int | None] = mapped_column(SmallInteger)
     seasonality: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     material_guess: Mapped[str | None] = mapped_column(String(60))
 
     embedding: Mapped[list[float] | None] = mapped_column(Vector(768))
-    confidence_scores: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    confidence_scores: Mapped[ConfidenceScores] = mapped_column(
+        PydanticJSON(ConfidenceScores), default=lambda: ConfidenceScores(root={})
+    )
     needs_review: Mapped[bool] = mapped_column(Boolean, default=False)
     coppa_protected: Mapped[bool] = mapped_column(Boolean, default=False)
 

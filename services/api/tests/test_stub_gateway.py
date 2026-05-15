@@ -1,5 +1,6 @@
 import pytest
 
+from app.schemas.common import WeatherSnapshot
 from app.services.model_gateway import StubGateway
 
 
@@ -11,7 +12,8 @@ async def test_stub_tag_item_returns_full_payload() -> None:
     assert result.pattern in {"solid", "stripe", "floral", "graphic", "plaid", "other"}
     assert 0 <= result.formality <= 10
     assert len(result.embedding) == 768
-    assert "category" in result.confidence_scores
+    assert "category" in result.confidence_scores.root
+    assert all(c.hex.startswith("#") for c in result.colors)
 
 
 @pytest.mark.asyncio
@@ -25,7 +27,7 @@ async def test_stub_stylist_composes_outfits_with_required_slots() -> None:
         candidates=candidates,
         destination="office",
         mood="confident",
-        weather={"temp_c": 22, "condition": "clear"},
+        weather=WeatherSnapshot(temp_c=22, condition="clear", wind_kph=5, source="stub"),
         notes=None,
         kid_mode=False,
     )

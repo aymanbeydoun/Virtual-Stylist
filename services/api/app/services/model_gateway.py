@@ -7,17 +7,18 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from app.config import get_settings
+from app.schemas.common import ColorTag, ConfidenceScores, WeatherSnapshot
 
 
 @dataclass
 class TagResult:
     category: str
     pattern: str
-    colors: list[dict[str, Any]]
+    colors: list[ColorTag]
     formality: int
     seasonality: list[str]
     embedding: list[float]
-    confidence_scores: dict[str, float]
+    confidence_scores: ConfidenceScores
 
 
 @dataclass
@@ -35,7 +36,7 @@ class ModelGateway(Protocol):
         candidates: list[dict[str, Any]],
         destination: str,
         mood: str,
-        weather: dict[str, Any] | None,
+        weather: WeatherSnapshot | None,
         notes: str | None,
         kid_mode: bool,
     ) -> StylistResult: ...
@@ -69,11 +70,13 @@ class StubGateway:
         return TagResult(
             category=rng.choice(_CATEGORIES),
             pattern=rng.choice(_PATTERNS),
-            colors=[{"name": "navy", "hex": "#1c2541", "weight": 0.7}],
+            colors=[ColorTag(name="navy", hex="#1c2541", weight=0.7)],
             formality=rng.randint(2, 8),
             seasonality=rng.choice(_SEASONS),
             embedding=[rng.uniform(-1, 1) for _ in range(768)],
-            confidence_scores={"category": 0.92, "pattern": 0.81, "color": 0.95},
+            confidence_scores=ConfidenceScores(
+                root={"category": 0.92, "pattern": 0.81, "color": 0.95}
+            ),
         )
 
     async def remove_background(self, image_bytes: bytes) -> bytes:
@@ -85,7 +88,7 @@ class StubGateway:
         candidates: list[dict[str, Any]],
         destination: str,
         mood: str,
-        weather: dict[str, Any] | None,
+        weather: WeatherSnapshot | None,
         notes: str | None,
         kid_mode: bool,
     ) -> StylistResult:
@@ -107,7 +110,7 @@ class StubGateway:
                         "items": picked,
                         "rationale": (
                             f"A {mood} look for {destination.replace('_', ' ')}"
-                            + (f" — packed for {weather.get('condition')}." if weather else ".")
+                            + (f" — packed for {weather.condition}." if weather else ".")
                         ),
                         "confidence": 0.78,
                     }
@@ -133,7 +136,7 @@ class AnthropicGateway:
         candidates: list[dict[str, Any]],
         destination: str,
         mood: str,
-        weather: dict[str, Any] | None,
+        weather: WeatherSnapshot | None,
         notes: str | None,
         kid_mode: bool,
     ) -> StylistResult:
@@ -154,7 +157,7 @@ class AnthropicGateway:
         payload = {
             "destination": destination,
             "mood": mood,
-            "weather": weather,
+            "weather": weather.model_dump(mode="json") if weather else None,
             "notes": notes,
             "candidates": candidates,
         }

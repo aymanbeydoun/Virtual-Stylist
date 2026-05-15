@@ -32,7 +32,16 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["http://localhost:8081", "http://localhost:19006"]
 
+    stylist_rate_limit: str = "30/minute"
+    upload_rate_limit: str = "60/minute"
+
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    if settings.environment == "production" and settings.dev_auth_bypass:
+        raise RuntimeError(
+            "DEV_AUTH_BYPASS must be false in production. Refusing to start to "
+            "prevent unauthenticated access to expensive AI endpoints."
+        )
+    return settings

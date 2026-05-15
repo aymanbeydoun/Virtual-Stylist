@@ -5,6 +5,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.users import OwnerKind
 from app.models.wardrobe import Pattern
+from app.schemas.common import ColorTag
+
+__all__ = [
+    "ColorTag",
+    "ItemCorrectionIn",
+    "UploadUrlRequest",
+    "UploadUrlResponse",
+    "WardrobeItemCreate",
+    "WardrobeItemOut",
+]
 
 
 class UploadUrlRequest(BaseModel):
@@ -23,12 +33,6 @@ class WardrobeItemCreate(BaseModel):
     object_key: str
     owner_kind: OwnerKind = OwnerKind.user
     owner_id: uuid.UUID | None = None
-
-
-class ColorTag(BaseModel):
-    name: str
-    hex: str
-    weight: float
 
 
 class WardrobeItemOut(BaseModel):

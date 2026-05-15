@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import time
-from typing import Any
 
 import httpx
 
 from app.config import get_settings
+from app.schemas.common import WeatherSnapshot
 
-_CACHE: dict[tuple[float, float], tuple[float, dict[str, Any]]] = {}
+_CACHE: dict[tuple[float, float], tuple[float, WeatherSnapshot]] = {}
 _TTL_SECONDS = 15 * 60
 
 
@@ -16,7 +16,7 @@ def _round_coord(value: float) -> float:
     return round(value, 1)
 
 
-async def get_weather(lat: float | None, lon: float | None) -> dict[str, Any] | None:
+async def get_weather(lat: float | None, lon: float | None) -> WeatherSnapshot | None:
     if lat is None or lon is None:
         return None
     key = (_round_coord(lat), _round_coord(lon))
@@ -27,7 +27,7 @@ async def get_weather(lat: float | None, lon: float | None) -> dict[str, Any] | 
 
     settings = get_settings()
     if not settings.openweather_api_key:
-        snapshot = {"temp_c": 22.0, "condition": "clear", "wind_kph": 5.0, "source": "stub"}
+        snapshot = WeatherSnapshot(temp_c=22.0, condition="clear", wind_kph=5.0, source="stub")
         _CACHE[key] = (now, snapshot)
         return snapshot
 
@@ -43,11 +43,11 @@ async def get_weather(lat: float | None, lon: float | None) -> dict[str, Any] | 
         )
         resp.raise_for_status()
         data = resp.json()
-        snapshot = {
-            "temp_c": data["main"]["temp"],
-            "condition": data["weather"][0]["main"].lower(),
-            "wind_kph": data["wind"]["speed"] * 3.6,
-            "source": "openweather",
-        }
+        snapshot = WeatherSnapshot(
+            temp_c=data["main"]["temp"],
+            condition=data["weather"][0]["main"].lower(),
+            wind_kph=data["wind"]["speed"] * 3.6,
+            source="openweather",
+        )
         _CACHE[key] = (now, snapshot)
         return snapshot

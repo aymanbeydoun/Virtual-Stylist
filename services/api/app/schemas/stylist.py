@@ -1,10 +1,11 @@
 import uuid
 from datetime import datetime
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.users import OwnerKind
+from app.schemas.common import WeatherSnapshot
 from app.schemas.wardrobe import WardrobeItemOut
 
 Destination = Literal[
@@ -41,4 +42,4 @@ class OutfitOut(BaseModel):
 
 class GenerateOutfitResponse(BaseModel):
     outfits: list[OutfitOut]
-    weather: dict[str, Any] | None = None
+    weather: WeatherSnapshot | None = None

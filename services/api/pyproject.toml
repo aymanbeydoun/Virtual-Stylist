@@ -21,6 +21,7 @@ dependencies = [
     "structlog>=24.4",
     "anthropic>=0.39",
     "google-cloud-storage>=2.18",
+    "slowapi>=0.1.9",
 ]
 
 [dependency-groups]

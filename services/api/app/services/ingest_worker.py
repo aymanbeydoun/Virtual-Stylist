@@ -51,7 +51,7 @@ async def ingest_item(ctx: dict[str, Any], item_id: str) -> None:
         item.seasonality = tags.seasonality
         item.embedding = tags.embedding
         item.confidence_scores = tags.confidence_scores
-        item.needs_review = min(tags.confidence_scores.values()) < 0.7
+        item.needs_review = tags.confidence_scores.min_confidence < 0.7
         item.status = "ready"
 
         await db.commit()

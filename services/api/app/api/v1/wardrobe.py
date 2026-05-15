@@ -3,12 +3,13 @@ from typing import Annotated
 
 from arq import create_pool
 from arq.connections import RedisSettings
-from fastapi import APIRouter, Depends, HTTPException, Path, Response, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.auth import CurrentUser
+from app.core.rate_limit import limiter, user_or_ip
 from app.core.storage import get_storage, new_object_key
 from app.db import get_db
 from app.models.family import FamilyMember
@@ -50,11 +51,14 @@ async def _resolve_owner(
 
 
 @router.post("/upload-url", response_model=UploadUrlResponse)
+@limiter.limit(lambda: get_settings().upload_rate_limit, key_func=user_or_ip)
 async def create_upload_url(
+    request: Request,
     body: UploadUrlRequest,
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> UploadUrlResponse:
+    request.state.user = user
     await _resolve_owner(db, user.id, body.owner_kind, body.owner_id)
     storage = get_storage()
     key = new_object_key(prefix=f"raw/{user.id}", content_type=body.content_type)

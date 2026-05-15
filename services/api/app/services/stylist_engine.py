@@ -17,6 +17,7 @@ from app.models.outfits import (
 )
 from app.models.users import OwnerKind
 from app.models.wardrobe import WardrobeItem
+from app.schemas.common import WeatherSnapshot
 from app.services.model_gateway import StylistResult, get_model_gateway
 from app.services.weather import get_weather
 
@@ -53,13 +54,12 @@ def _slot_for(category: str | None) -> OutfitSlot | None:
     return None
 
 
-def _weather_ok(item: WardrobeItem, weather: dict[str, Any] | None) -> bool:
+def _weather_ok(item: WardrobeItem, weather: WeatherSnapshot | None) -> bool:
     if not weather:
         return True
-    temp = weather.get("temp_c", 22.0)
-    if temp >= 28 and "winter" in (item.seasonality or []):
+    if weather.temp_c >= 28 and "winter" in (item.seasonality or []):
         return False
-    if temp <= 5 and "summer" in (item.seasonality or []):
+    if weather.temp_c <= 5 and "summer" in (item.seasonality or []):
         return False
     return True
 
@@ -70,7 +70,7 @@ async def _select_candidates(
     owner_kind: OwnerKind,
     owner_id: uuid.UUID,
     destination: str,
-    weather: dict[str, Any] | None,
+    weather: WeatherSnapshot | None,
     per_slot: int = 4,
 ) -> list[WardrobeItem]:
     formality_range = _DESTINATION_FORMALITY.get(destination, (0, 10))
@@ -129,14 +129,14 @@ def _serialize_candidate(item: WardrobeItem) -> dict[str, Any]:
         "id": str(item.id),
         "slot": slot.value if slot else "accessory",
         "category": item.category,
-        "colors": item.colors,
+        "colors": [c.model_dump(mode="json") for c in item.colors],
         "pattern": item.pattern.value if item.pattern else None,
         "formality": item.formality,
         "seasonality": item.seasonality,
     }
 
 
-def _validate(outfit: dict[str, Any], weather: dict[str, Any] | None) -> str | None:
+def _validate(outfit: dict[str, Any], weather: WeatherSnapshot | None) -> str | None:
     slots = [i["slot"] for i in outfit["items"]]
     has_top_or_dress = "top" in slots or "dress" in slots
     has_bottom_or_dress = "bottom" in slots or "dress" in slots
@@ -163,7 +163,7 @@ async def generate_outfits(
     kid_mode: bool,
     lat: float | None = None,
     lon: float | None = None,
-) -> tuple[list[Outfit], dict[str, Any] | None]:
+) -> tuple[list[Outfit], WeatherSnapshot | None]:
     weather = await get_weather(lat, lon)
     items = await _select_candidates(
         db, owner_kind=owner_kind, owner_id=owner_id, destination=destination, weather=weather

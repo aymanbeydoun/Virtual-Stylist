@@ -1,14 +1,15 @@
 import enum
 import uuid
 from datetime import datetime
-from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.json_types import PydanticJSON
 from app.models.base import Base, created_at_col
 from app.models.users import OwnerKind
+from app.schemas.common import WeatherSnapshot
 
 
 class OutfitSource(enum.StrEnum):
@@ -48,7 +49,9 @@ class Outfit(Base):
     )
     destination: Mapped[str | None] = mapped_column(String(40))
     mood: Mapped[str | None] = mapped_column(String(40))
-    weather_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    weather_snapshot: Mapped[WeatherSnapshot | None] = mapped_column(
+        PydanticJSON(WeatherSnapshot)
+    )
     rationale: Mapped[str | None] = mapped_column(Text)
     model_id: Mapped[str | None] = mapped_column(String(120))
     confidence: Mapped[float | None] = mapped_column()

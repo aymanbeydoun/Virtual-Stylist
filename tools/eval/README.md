@@ -38,6 +38,15 @@ PYTHONPATH=../.. uv run python -m tools.eval.run_eval \
 Add `--backend anthropic` to evaluate the production stylist; default is the
 stub so this works without API keys in CI.
 
+## ⚠️ Limitation while running against the stub gateway
+
+`StubGateway` is seeded by the first 256 bytes of the input image — its tags
+are deterministic but unrelated to the actual content of the photo. **Eval
+results against the stub are noise**: useful only for verifying the harness
+plumbing (loading, scoring math, output format), not the model. Numbers only
+become meaningful once `MODEL_GATEWAY_BACKEND` is pointed at a real CV
+model (a fine-tuned ViT on a Vertex endpoint).
+
 ## Quality bar (Phase 2 exit gate)
 
 - ≥90% top-1 category accuracy on a 500-item internal set across men/women/kids.

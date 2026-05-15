@@ -1,11 +1,13 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.core.auth import CurrentUser
+from app.core.rate_limit import limiter, user_or_ip
 from app.db import get_db
 from app.models.family import FamilyMember, FamilyMemberKind
 from app.models.outfits import Outfit, OutfitEvent, OutfitEventKind
@@ -66,11 +68,14 @@ def _outfit_to_response(outfit: Outfit, items_by_id: dict[uuid.UUID, object]) ->
 
 
 @router.post("/generate", response_model=GenerateOutfitResponse)
+@limiter.limit(lambda: get_settings().stylist_rate_limit, key_func=user_or_ip)
 async def generate(
+    request: Request,
     body: GenerateOutfitRequest,
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> GenerateOutfitResponse:
+    request.state.user = user
     owner_kind, owner_id, kid_mode = await _resolve_owner_and_kid_mode(
         db, user.id, body.owner_kind, body.owner_id
     )
