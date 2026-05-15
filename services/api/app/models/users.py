@@ -1,7 +1,7 @@
 import enum
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import JSON, DateTime, Enum, SmallInteger, String, Text
@@ -66,7 +66,7 @@ class StyleProfile(Base):
     owner_kind: Mapped[OwnerKind] = mapped_column(Enum(OwnerKind, name="owner_kind"))
     owner_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
 
-    sizes: Mapped[dict] = mapped_column(JSON, default=dict)
+    sizes: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     style_vector: Mapped[list[float] | None] = mapped_column(Vector(768))
     preferred_colors: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     disliked_categories: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)

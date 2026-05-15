@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -41,4 +41,4 @@ class OutfitOut(BaseModel):
 
 class GenerateOutfitResponse(BaseModel):
     outfits: list[OutfitOut]
-    weather: dict | None = None
+    weather: dict[str, Any] | None = None

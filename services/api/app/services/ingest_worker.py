@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import structlog
 from arq.connections import RedisSettings
@@ -16,7 +16,7 @@ from app.services.model_gateway import get_model_gateway
 logger = structlog.get_logger()
 
 
-async def ingest_item(ctx: dict, item_id: str) -> None:
+async def ingest_item(ctx: dict[str, Any], item_id: str) -> None:
     """Run the full CV pipeline for one wardrobe item."""
     storage = get_storage()
     gateway = get_model_gateway()
@@ -59,5 +59,5 @@ async def ingest_item(ctx: dict, item_id: str) -> None:
 
 
 class WorkerSettings:
-    functions: ClassVar[list] = [ingest_item]
+    functions: ClassVar[list[Any]] = [ingest_item]
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)

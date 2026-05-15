@@ -54,15 +54,17 @@ class GCSStorage:
 
     async def signed_read_url(self, key: str) -> str:
         blob = self._bucket.blob(key)
-        return blob.generate_signed_url(
+        url: str = blob.generate_signed_url(
             expiration=datetime.now(UTC) + timedelta(hours=1), method="GET", version="v4"
         )
+        return url
 
     async def write_bytes(self, key: str, data: bytes) -> None:
         self._bucket.blob(key).upload_from_string(data)
 
     async def read_bytes(self, key: str) -> bytes:
-        return self._bucket.blob(key).download_as_bytes()
+        data: bytes = self._bucket.blob(key).download_as_bytes()
+        return data
 
 
 def get_storage() -> StorageBackend:

@@ -1,6 +1,7 @@
 import enum
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, SmallInteger, String, Text
@@ -35,14 +36,14 @@ class WardrobeItem(Base):
 
     category: Mapped[str | None] = mapped_column(String(120), index=True)
     subcategory_path: Mapped[str | None] = mapped_column(String(255))
-    colors: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    colors: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     pattern: Mapped[Pattern | None] = mapped_column(Enum(Pattern, name="pattern"))
     formality: Mapped[int | None] = mapped_column(SmallInteger)
     seasonality: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     material_guess: Mapped[str | None] = mapped_column(String(60))
 
     embedding: Mapped[list[float] | None] = mapped_column(Vector(768))
-    confidence_scores: Mapped[dict] = mapped_column(JSON, default=dict)
+    confidence_scores: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     needs_review: Mapped[bool] = mapped_column(Boolean, default=False)
     coppa_protected: Mapped[bool] = mapped_column(Boolean, default=False)
 

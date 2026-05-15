@@ -38,9 +38,7 @@ class FamilyMember(Base):
     created_at: Mapped[datetime] = created_at_col()
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    guardian: Mapped["object"] = relationship(  # type: ignore[assignment]
-        "User", back_populates="family_members"
-    )
+    guardian: Mapped["object"] = relationship("User", back_populates="family_members")
     consents: Mapped[list["KidConsent"]] = relationship(
         back_populates="family_member", cascade="all, delete-orphan"
     )
