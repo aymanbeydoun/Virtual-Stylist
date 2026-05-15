@@ -82,20 +82,23 @@ def _db_clean() -> None:
 
 @pytest.fixture()
 def client(_db_clean: None) -> Iterator[TestClient]:
-    """Fresh TestClient per test. We dispose the app's async engine afterwards so
-    the next test's TestClient (with its own event loop) gets a clean pool."""
-    import asyncio
+    """Fresh TestClient per test backed by a NullPool engine so no asyncpg
+    connections leak across the per-test anyio portal event loop."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from sqlalchemy.pool import NullPool
 
     from app import db as db_module
+    from app.config import get_settings
+
+    db_module.engine = create_async_engine(
+        get_settings().database_url, poolclass=NullPool, future=True
+    )
+    db_module.SessionLocal = async_sessionmaker(db_module.engine, expire_on_commit=False)
+
     from app.main import app
 
     with TestClient(app) as c:
         yield c
-
-    async def _dispose() -> None:
-        await db_module.engine.dispose()
-
-    asyncio.run(_dispose())
 
 
 @pytest.fixture()
