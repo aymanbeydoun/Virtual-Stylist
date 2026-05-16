@@ -54,6 +54,7 @@ def _migrate() -> Iterator[None]:
     os.environ["STORAGE_LOCAL_PATH"] = storage_dir
     os.environ["DEV_AUTH_BYPASS"] = "true"
     os.environ["MODEL_GATEWAY_BACKEND"] = "stub"
+    os.environ["INGEST_INLINE"] = "true"
     from app.config import get_settings
 
     get_settings.cache_clear()

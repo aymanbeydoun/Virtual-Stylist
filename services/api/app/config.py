@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     stylist_rate_limit: str = "30/minute"
     upload_rate_limit: str = "60/minute"
 
+    ingest_inline: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

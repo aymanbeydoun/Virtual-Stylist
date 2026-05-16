@@ -85,16 +85,21 @@ async def create_item(
     await db.refresh(item)
 
     settings = get_settings()
-    try:
-        redis = await create_pool(RedisSettings.from_dsn(settings.redis_url))
-        await redis.enqueue_job("ingest_item", str(item.id))
-        await redis.close()
-    except Exception:
-        # In dev without redis: run inline so the loop still works.
+    if settings.ingest_inline:
         from app.services.ingest_worker import ingest_item
 
         await ingest_item({}, str(item.id))
         await db.refresh(item)
+    else:
+        try:
+            redis = await create_pool(RedisSettings.from_dsn(settings.redis_url))
+            await redis.enqueue_job("ingest_item", str(item.id))
+            await redis.aclose()
+        except Exception:
+            from app.services.ingest_worker import ingest_item
+
+            await ingest_item({}, str(item.id))
+            await db.refresh(item)
 
     return item
 
