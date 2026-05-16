@@ -7,6 +7,7 @@ import { useActiveProfile } from "@/state/profile";
 import { palette } from "@/theme";
 import { AddItemScreen } from "@/screens/Closet/AddItemScreen";
 import { ClosetScreen } from "@/screens/Closet/ClosetScreen";
+import { GapsScreen } from "@/screens/Closet/GapsScreen";
 import { ItemDetailScreen } from "@/screens/Closet/ItemDetailScreen";
 import { FamilyScreen } from "@/screens/Family/FamilyScreen";
 import { AddMemberScreen } from "@/screens/Family/AddMemberScreen";
@@ -22,6 +23,7 @@ export type RootStackParamList = {
   AddMember: undefined;
   OutfitDetail: { outfitId: string };
   SignIn: undefined;
+  Gaps: undefined;
 };
 
 const Tab = createBottomTabNavigator();
@@ -92,6 +94,7 @@ export function RootNavigator() {
             component={OutfitDetailScreen}
             options={{ title: "Outfit" }}
           />
+          <Stack.Screen name="Gaps" component={GapsScreen} options={{ title: "Closet gaps" }} />
         </>
       )}
     </Stack.Navigator>

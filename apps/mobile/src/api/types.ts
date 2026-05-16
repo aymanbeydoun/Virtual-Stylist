@@ -61,3 +61,18 @@ export interface GenerateOutfitResponse {
   outfits: Outfit[];
   weather: { temp_c: number; condition: string; wind_kph: number } | null;
 }
+
+export type GapSeverity = "high" | "medium" | "low";
+export type GapStatus = "open" | "dismissed" | "resolved";
+
+export interface GapFinding {
+  id: string;
+  slot: string;
+  category_hint: string | null;
+  title: string;
+  rationale: string | null;
+  severity: GapSeverity;
+  status: GapStatus;
+  search_query: string | null;
+  created_at: string;
+}

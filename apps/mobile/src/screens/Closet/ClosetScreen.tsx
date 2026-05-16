@@ -26,17 +26,38 @@ export function ClosetScreen() {
       }),
   });
 
+  const readyCount = (items.data ?? []).filter((i) => i.status === "ready").length;
+  const showGapsPromo = readyCount >= 4;
+
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.eyebrow}>Closet</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.eyebrow}>Closet · {readyCount} items</Text>
           <Text style={styles.title}>{profile.ownerLabel}</Text>
         </View>
-        <Pressable style={styles.addButton} onPress={() => nav.navigate("AddItem")}>
-          <Text style={styles.addButtonText}>+ Add</Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable style={styles.ghostButton} onPress={() => nav.navigate("Gaps")}>
+            <Text style={styles.ghostButtonText}>Gaps</Text>
+          </Pressable>
+          <Pressable style={styles.addButton} onPress={() => nav.navigate("AddItem")}>
+            <Text style={styles.addButtonText}>+ Add</Text>
+          </Pressable>
+        </View>
       </View>
+
+      {showGapsPromo && (
+        <Pressable style={styles.promo} onPress={() => nav.navigate("Gaps")}>
+          <View style={styles.promoDot} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.promoTitle}>See what your closet is missing</Text>
+            <Text style={styles.promoBody}>
+              AI looks at your wardrobe holistically and finds outfits you can&apos;t yet build.
+            </Text>
+          </View>
+          <Text style={styles.promoArrow}>›</Text>
+        </Pressable>
+      )}
 
       {items.isLoading ? (
         <Text style={styles.empty}>Loading…</Text>
@@ -93,6 +114,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: spacing(5),
   },
+  headerActions: { flexDirection: "row", gap: spacing(2), alignItems: "center" },
   eyebrow: { color: palette.textMuted, fontSize: 12, letterSpacing: 1, textTransform: "uppercase" },
   title: { color: palette.text, fontSize: 28, fontWeight: "700", marginTop: 4 },
   addButton: {
@@ -102,6 +124,33 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
   },
   addButtonText: { color: palette.background, fontWeight: "700" },
+  ghostButton: {
+    paddingHorizontal: spacing(3),
+    paddingVertical: spacing(2),
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: palette.surfaceAlt,
+  },
+  ghostButtonText: { color: palette.text, fontWeight: "600" },
+  promo: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: spacing(4),
+    marginBottom: spacing(3),
+    padding: spacing(4),
+    backgroundColor: palette.surface,
+    borderRadius: radii.md,
+    gap: spacing(3),
+  },
+  promoDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: palette.accent,
+  },
+  promoTitle: { color: palette.text, fontWeight: "600", marginBottom: 2 },
+  promoBody: { color: palette.textMuted, fontSize: 13, lineHeight: 18 },
+  promoArrow: { color: palette.textMuted, fontSize: 24, fontWeight: "300" },
   empty: { color: palette.textMuted, padding: spacing(6) },
   emptyState: { padding: spacing(8), alignItems: "center" },
   emptyTitle: { color: palette.text, fontSize: 18, fontWeight: "600", marginBottom: spacing(2) },

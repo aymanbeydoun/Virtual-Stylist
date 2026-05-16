@@ -172,22 +172,34 @@ function OutfitCard({ outfit, index, onOpen }: { outfit: Outfit; index: number; 
           <Text style={styles.outfitConfidence}>{Math.round(outfit.confidence * 100)}% match</Text>
         )}
       </View>
-      <View style={styles.outfitItems}>
-        {outfit.items.map((oi) => (
-          <View key={oi.item.id} style={styles.outfitItem}>
-            {oi.item.thumbnail_key ? (
-              <Image
-                source={{ uri: `${baseUrl}/api/v1/wardrobe/_local_read/${oi.item.thumbnail_key}` }}
-                style={styles.outfitThumb}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={[styles.outfitThumb, { backgroundColor: palette.surfaceAlt }]} />
-            )}
-            <Text style={styles.outfitSlot}>{oi.slot}</Text>
-          </View>
-        ))}
-      </View>
+      {outfit.composite_image_key ? (
+        <Image
+          source={{
+            uri: `${baseUrl}/api/v1/wardrobe/_local_read/${outfit.composite_image_key}`,
+          }}
+          style={styles.composite}
+          contentFit="cover"
+        />
+      ) : (
+        <View style={styles.outfitItems}>
+          {outfit.items.map((oi) => (
+            <View key={oi.item.id} style={styles.outfitItem}>
+              {oi.item.thumbnail_key ? (
+                <Image
+                  source={{
+                    uri: `${baseUrl}/api/v1/wardrobe/_local_read/${oi.item.thumbnail_key}`,
+                  }}
+                  style={styles.outfitThumb}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={[styles.outfitThumb, { backgroundColor: palette.surfaceAlt }]} />
+              )}
+              <Text style={styles.outfitSlot}>{oi.slot}</Text>
+            </View>
+          ))}
+        </View>
+      )}
       {outfit.rationale && <Text style={styles.outfitRationale}>{outfit.rationale}</Text>}
     </Pressable>
   );
@@ -223,6 +235,7 @@ const styles = StyleSheet.create({
   outfitItems: { flexDirection: "row", gap: spacing(2) },
   outfitItem: { alignItems: "center", flex: 1 },
   outfitThumb: { width: "100%", aspectRatio: 1, borderRadius: radii.md, backgroundColor: palette.surfaceAlt },
+  composite: { width: "100%", aspectRatio: 1, borderRadius: radii.md, backgroundColor: palette.surfaceAlt },
   outfitSlot: { color: palette.textMuted, fontSize: 11, marginTop: 4, textTransform: "capitalize" },
   outfitRationale: { color: palette.textMuted, marginTop: spacing(3), fontStyle: "italic" },
   empty: { color: palette.textMuted, marginTop: spacing(6), textAlign: "center" },
