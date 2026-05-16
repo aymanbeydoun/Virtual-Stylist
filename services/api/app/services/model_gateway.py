@@ -294,6 +294,27 @@ Output ONLY this JSON shape, no markdown:
 """
 
 
+def _detect_image_media_type(image_bytes: bytes) -> str:
+    """Sniff the actual media type from magic bytes.
+
+    Replicate's bg-removal returns PNG (transparent background) even when fed a
+    JPEG, so we can't assume the source format survives the pipeline. Claude
+    Vision rejects requests where the declared media_type doesn't match the
+    payload, so we detect from the first few bytes and pass through accurately.
+    """
+    if len(image_bytes) < 8:
+        return "image/jpeg"
+    if image_bytes[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if image_bytes[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if image_bytes[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if image_bytes[:4] == b"RIFF" and image_bytes[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/jpeg"
+
+
 def _color_from_payload(raw: dict[str, Any]) -> ColorTag:
     """Coerce an LLM-returned color dict into a strict ColorTag.
 
@@ -403,27 +424,27 @@ class ProductionGateway:
     async def _tag_with_claude(
         self, image_bytes: bytes
     ) -> tuple[str, str, list[ColorTag], int, list[str], dict[str, float]]:
+        media_type = _detect_image_media_type(image_bytes)
         b64 = base64.b64encode(image_bytes).decode()
+        # The Anthropic SDK's MessageParam type is a typed dict; declared inline
+        # here as Any-typed so we can use the dynamic media_type. The runtime
+        # API accepts any valid image/{jpeg,png,gif,webp}.
+        content: list[dict[str, Any]] = [
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": media_type,
+                    "data": b64,
+                },
+            },
+            {"type": "text", "text": "Tag this item."},
+        ]
         msg = await self._anthropic.messages.create(
             model=self._anthropic_vision_model,
             max_tokens=600,
             system=_TAGGING_SYSTEM,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/jpeg",
-                                "data": b64,
-                            },
-                        },
-                        {"type": "text", "text": "Tag this item."},
-                    ],
-                }
-            ],
+            messages=[{"role": "user", "content": content}],  # type: ignore[typeddict-item]
         )
         text = "".join(b.text for b in msg.content if b.type == "text")
         parsed = _extract_json(text)
