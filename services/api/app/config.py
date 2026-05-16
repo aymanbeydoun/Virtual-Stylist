@@ -2,11 +2,56 @@ from functools import lru_cache
 from typing import Literal
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
+
+
+class _DotenvWinsOnEmpty(PydanticBaseSettingsSource):
+    """Inverts pydantic-settings priority for the case where the OS exports an *empty*
+    string for a known var (some sandboxed runtimes do this to scrub credentials).
+    If env var is "" but .env has a real value, treat the .env value as authoritative.
+    """
+
+    def __init__(
+        self,
+        settings_cls: type[BaseSettings],
+        env_source: PydanticBaseSettingsSource,
+        dotenv_source: PydanticBaseSettingsSource,
+    ) -> None:
+        super().__init__(settings_cls)
+        self._env = env_source
+        self._dotenv = dotenv_source
+
+    def get_field_value(
+        self, field: object, field_name: str
+    ) -> tuple[object, str, bool]:  # pragma: no cover - pydantic protocol
+        return None, field_name, False
+
+    def __call__(self) -> dict[str, object]:
+        merged: dict[str, object] = dict(self._dotenv())
+        for k, v in self._env().items():
+            if isinstance(v, str) and v == "" and k in merged:
+                continue
+            merged[k] = v
+        return merged
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (
+            init_settings,
+            _DotenvWinsOnEmpty(settings_cls, env_settings, dotenv_settings),
+            file_secret_settings,
+        )
 
     environment: Literal["development", "staging", "production"] = "development"
     secret_key: str = Field(default="dev-secret-change-me", min_length=16)
@@ -25,8 +70,20 @@ class Settings(BaseSettings):
 
     model_gateway_backend: Literal["stub", "anthropic", "vertex"] = "stub"
     anthropic_api_key: str = ""
+    anthropic_model: str = "claude-sonnet-4-6"
+    anthropic_vision_model: str = "claude-sonnet-4-6"
     vertex_project: str = ""
     vertex_location: str = "us-central1"
+
+    replicate_api_token: str = ""
+    replicate_bg_removal_model: str = (
+        "lucataco/remove-bg:"
+        "95fcc2a26d3899cd6c2691c900465aaeff466285a65c14638cc5f36f34befaf1"
+    )
+    replicate_clip_model: str = (
+        "krthr/clip-embeddings:"
+        "1c0371070cb827ec3c7f2f28adcdde54b50dcd239aa6faea0bc98b174ef03fb4"
+    )
 
     openweather_api_key: str = ""
 

@@ -17,7 +17,16 @@ logger = structlog.get_logger()
 
 
 async def ingest_item(ctx: dict[str, Any], item_id: str) -> None:
-    """Run the full CV pipeline for one wardrobe item."""
+    """Run the full CV pipeline for one wardrobe item.
+
+    Failure model:
+      - FileNotFoundError on the source bytes → permanent failure (the upload was never
+        committed). Mark status='failed', return cleanly.
+      - Any other exception from the gateway → mark status='failed', log, return cleanly.
+        We don't re-raise: Arq would retry indefinitely on an invalid JPEG, which costs
+        Claude credits and burns the queue. The user can correct + re-trigger via the
+        correction endpoint.
+    """
     storage = get_storage()
     gateway = get_model_gateway()
     item_uuid = uuid.UUID(item_id)
@@ -36,14 +45,25 @@ async def ingest_item(ctx: dict[str, Any], item_id: str) -> None:
             await db.commit()
             return
 
-        cutout = await gateway.remove_background(raw)
-        cutout_key = item.raw_image_key.replace("raw/", "cutout/")
-        await storage.write_bytes(cutout_key, cutout)
+        try:
+            cutout = await gateway.remove_background(raw)
+            cutout_key = item.raw_image_key.replace("raw/", "cutout/")
+            await storage.write_bytes(cutout_key, cutout)
 
-        tags = await gateway.tag_item(cutout)
+            tags = await gateway.tag_item(cutout)
+        except Exception as exc:
+            logger.warning(
+                "item.ingest_failed",
+                item_id=str(item.id),
+                error_type=type(exc).__name__,
+                error_msg=str(exc)[:200],
+            )
+            item.status = "failed"
+            await db.commit()
+            return
 
         item.cutout_image_key = cutout_key
-        item.thumbnail_key = cutout_key  # downscale in a follow-up worker pass
+        item.thumbnail_key = cutout_key
         item.category = tags.category
         item.pattern = Pattern(tags.pattern)
         item.colors = tags.colors
