@@ -23,30 +23,44 @@ def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
     op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
 
-    user_role = postgresql.ENUM("adult", "guardian", name="user_role")
-    user_role.create(op.get_bind(), checkfirst=True)
-    owner_kind = postgresql.ENUM("user", "family_member", name="owner_kind")
-    owner_kind.create(op.get_bind(), checkfirst=True)
-    fam_kind = postgresql.ENUM("adult", "teen", "kid", name="family_member_kind")
-    fam_kind.create(op.get_bind(), checkfirst=True)
-    consent_method = postgresql.ENUM("card_check", "signed_id", "kba", name="consent_method")
-    consent_method.create(op.get_bind(), checkfirst=True)
+    user_role = postgresql.ENUM("adult", "guardian", name="user_role", create_type=False)
+    op.execute("CREATE TYPE user_role AS ENUM ('adult', 'guardian')")
+    owner_kind = postgresql.ENUM("user", "family_member", name="owner_kind", create_type=False)
+    op.execute("CREATE TYPE owner_kind AS ENUM ('user', 'family_member')")
+    fam_kind = postgresql.ENUM(
+        "adult", "teen", "kid", name="family_member_kind", create_type=False
+    )
+    op.execute("CREATE TYPE family_member_kind AS ENUM ('adult', 'teen', 'kid')")
+    consent_method = postgresql.ENUM(
+        "card_check", "signed_id", "kba", name="consent_method", create_type=False
+    )
+    op.execute("CREATE TYPE consent_method AS ENUM ('card_check', 'signed_id', 'kba')")
     pattern = postgresql.ENUM(
-        "solid", "stripe", "floral", "graphic", "plaid", "other", name="pattern"
+        "solid", "stripe", "floral", "graphic", "plaid", "other",
+        name="pattern", create_type=False,
     )
-    pattern.create(op.get_bind(), checkfirst=True)
+    op.execute(
+        "CREATE TYPE pattern AS ENUM ('solid', 'stripe', 'floral', 'graphic', 'plaid', 'other')"
+    )
     outfit_source = postgresql.ENUM(
-        "ai_generated", "user_saved", "manual", name="outfit_source"
+        "ai_generated", "user_saved", "manual", name="outfit_source", create_type=False
     )
-    outfit_source.create(op.get_bind(), checkfirst=True)
+    op.execute("CREATE TYPE outfit_source AS ENUM ('ai_generated', 'user_saved', 'manual')")
     outfit_slot = postgresql.ENUM(
-        "top", "bottom", "dress", "outerwear", "shoes", "accessory", "jewelry", name="outfit_slot"
+        "top", "bottom", "dress", "outerwear", "shoes", "accessory", "jewelry",
+        name="outfit_slot", create_type=False,
     )
-    outfit_slot.create(op.get_bind(), checkfirst=True)
+    op.execute(
+        "CREATE TYPE outfit_slot AS ENUM ("
+        "'top', 'bottom', 'dress', 'outerwear', 'shoes', 'accessory', 'jewelry')"
+    )
     outfit_event_kind = postgresql.ENUM(
-        "worn", "skipped", "regenerated", "saved", name="outfit_event_kind"
+        "worn", "skipped", "regenerated", "saved",
+        name="outfit_event_kind", create_type=False,
     )
-    outfit_event_kind.create(op.get_bind(), checkfirst=True)
+    op.execute(
+        "CREATE TYPE outfit_event_kind AS ENUM ('worn', 'skipped', 'regenerated', 'saved')"
+    )
 
     op.create_table(
         "users",
