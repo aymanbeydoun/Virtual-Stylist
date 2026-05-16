@@ -2,7 +2,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import family, health, stylist, wardrobe
+from app.api.v1 import family, gaps, health, stylist, wardrobe
 from app.config import get_settings
 from app.core.rate_limit import RateLimitExceeded, limiter, rate_limit_exceeded_handler
 
@@ -31,3 +31,4 @@ app.include_router(health.router, prefix="/api/v1")
 app.include_router(wardrobe.router, prefix="/api/v1/wardrobe", tags=["wardrobe"])
 app.include_router(stylist.router, prefix="/api/v1/stylist", tags=["stylist"])
 app.include_router(family.router, prefix="/api/v1/family", tags=["family"])
+app.include_router(gaps.router, prefix="/api/v1/gaps", tags=["gaps"])

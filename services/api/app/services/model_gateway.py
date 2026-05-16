@@ -23,18 +23,18 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
-import logging
 import random
 import re
 from dataclasses import dataclass
 from typing import Any, Protocol
 
 import httpx
+import structlog
 
 from app.config import get_settings
 from app.schemas.common import ColorTag, ConfidenceScores, WeatherSnapshot
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -54,6 +54,12 @@ class StylistResult:
     model_id: str
 
 
+@dataclass
+class GapAnalysisResult:
+    findings: list[dict[str, Any]]
+    model_id: str
+
+
 class ModelGateway(Protocol):
     async def tag_item(self, image_bytes: bytes) -> TagResult: ...
     async def remove_background(self, image_bytes: bytes) -> bytes: ...
@@ -67,6 +73,12 @@ class ModelGateway(Protocol):
         notes: str | None,
         kid_mode: bool,
     ) -> StylistResult: ...
+    async def analyze_gaps(
+        self,
+        *,
+        items: list[dict[str, Any]],
+        owner_label: str,
+    ) -> GapAnalysisResult: ...
 
 
 # ---------------------------------------------------------------------------
@@ -145,6 +157,40 @@ class StubGateway:
                 )
         return StylistResult(outfits=outfits, model_id="stub-stylist-v0")
 
+    async def analyze_gaps(
+        self,
+        *,
+        items: list[dict[str, Any]],
+        owner_label: str,
+    ) -> GapAnalysisResult:
+        slots_present = {it.get("slot") for it in items if it.get("slot")}
+        findings: list[dict[str, Any]] = []
+        if "top" in slots_present and "bottom" in slots_present and "shoes" not in slots_present:
+            findings.append(
+                {
+                    "slot": "shoes",
+                    "category_hint": "shoes.casual_sneaker",
+                    "title": "A pair of versatile sneakers",
+                    "rationale": "You have tops and bottoms but no shoes to anchor them.",
+                    "severity": "high",
+                    "search_query": "white leather sneakers women",
+                }
+            )
+        if "shoes" in slots_present and not any(
+            "belt" in str(it.get("category", "")).lower() for it in items
+        ):
+            findings.append(
+                {
+                    "slot": "accessory",
+                    "category_hint": "accessories.belts.leather",
+                    "title": "A black leather belt",
+                    "rationale": "Pulls outfits together; missing from your closet today.",
+                    "severity": "medium",
+                    "search_query": "black leather belt",
+                }
+            )
+        return GapAnalysisResult(findings=findings, model_id="stub-gaps-v0")
+
 
 # ---------------------------------------------------------------------------
 # Production gateway — Replicate + Anthropic
@@ -213,6 +259,40 @@ _STYLIST_KID_SUFFIX = (
     "Avoid any product/brand names."
 )
 
+_GAP_SYSTEM = """\
+You analyse the user's wardrobe to identify the 3-5 most impactful missing items.
+
+You receive a JSON list of `items` (each with slot, category, colors, pattern, formality,
+seasonality) plus an owner_label like "You" or "Sara".
+
+A 'gap' is a specific, actionable hole — not a category buzzword. Bad: 'add more variety'.
+Good: 'a versatile black leather belt to anchor smart-casual looks'.
+
+Rules:
+- Identify gaps that materially expand the outfit space. Skip nice-to-haves until staples
+  are filled.
+- Prefer slots that unlock new outfits (shoes, outerwear, bottoms) over ones already covered.
+- Each gap MUST be specific enough to shop for: include a color hint and a usage rationale.
+- Tag severity:
+    'high'   = wardrobe is dysfunctional without it (eg. no shoes at all).
+    'medium' = limits outfit count significantly (eg. no black belt for smart casual).
+    'low'    = nice upgrade but optional.
+
+Output ONLY this JSON shape, no markdown:
+{
+  "findings": [
+    {
+      "slot": "shoes|top|bottom|outerwear|accessory|jewelry|dress",
+      "category_hint": "<dotted category like 'mens.shoes.loafer'>",
+      "title": "<5-10 word noun phrase the user could shop for>",
+      "rationale": "<one sentence, second person, why this gap matters>",
+      "severity": "high|medium|low",
+      "search_query": "<2-6 word phrase for affiliate search>"
+    }
+  ]
+}
+"""
+
 
 def _color_from_payload(raw: dict[str, Any]) -> ColorTag:
     """Coerce an LLM-returned color dict into a strict ColorTag.
@@ -273,16 +353,31 @@ class ProductionGateway:
         )
 
     async def remove_background(self, image_bytes: bytes) -> bytes:
+        """Replicate-based bg removal. Degrades to a pass-through on any failure
+        so the rest of the pipeline (Claude Vision tagging) still runs.
+
+        We intentionally swallow exceptions here because background removal is
+        a quality upgrade, not a correctness requirement. The tagger only needs
+        the photo; the user just loses the cutout look.
+        """
         if not self._replicate_token:
-            logger.warning("replicate token missing, returning original bytes")
             return image_bytes
-        data_url = "data:image/jpeg;base64," + base64.b64encode(image_bytes).decode()
-        _, version = self._bg_removal_model.split(":", 1)
-        result_url = await self._run_replicate(version, {"image": data_url})
-        async with httpx.AsyncClient(timeout=30.0) as c:
-            r = await c.get(result_url)
-            r.raise_for_status()
-            return r.content
+        try:
+            data_url = "data:image/jpeg;base64," + base64.b64encode(image_bytes).decode()
+            _, version = self._bg_removal_model.split(":", 1)
+            result_url = await self._run_replicate(version, {"image": data_url})
+            async with httpx.AsyncClient(timeout=30.0) as c:
+                r = await c.get(result_url)
+                r.raise_for_status()
+                return r.content
+        except Exception as exc:
+            logger.warning(
+                "replicate.bg_removal_failed",
+                exc_info=False,
+                error_type=type(exc).__name__,
+                error_msg=str(exc)[:160],
+            )
+            return image_bytes
 
     async def tag_item(self, image_bytes: bytes) -> TagResult:
         category, pattern, colors, formality, seasonality, confidence = await self._tag_with_claude(
@@ -336,17 +431,27 @@ class ProductionGateway:
         )
 
     async def _embed_clip(self, image_bytes: bytes) -> list[float]:
+        """Replicate CLIP embedding. Returns zeros on failure so similarity
+        search degrades gracefully rather than crashing the ingest pipeline.
+        """
         if not self._replicate_token:
-            logger.warning("replicate token missing, returning zero embedding")
             return [0.0] * 768
-        data_url = "data:image/jpeg;base64," + base64.b64encode(image_bytes).decode()
-        _, version = self._clip_model.split(":", 1)
-        result = await self._run_replicate(version, {"image": data_url}, expect="json")
-        if isinstance(result, dict) and "embedding" in result:
-            return [float(x) for x in result["embedding"]]
-        if isinstance(result, list):
-            return [float(x) for x in result]
-        raise ValueError(f"unexpected clip output: {type(result).__name__}")
+        try:
+            data_url = "data:image/jpeg;base64," + base64.b64encode(image_bytes).decode()
+            _, version = self._clip_model.split(":", 1)
+            result = await self._run_replicate(version, {"image": data_url}, expect="json")
+            if isinstance(result, dict) and "embedding" in result:
+                return [float(x) for x in result["embedding"]]
+            if isinstance(result, list):
+                return [float(x) for x in result]
+            raise ValueError(f"unexpected clip output: {type(result).__name__}")
+        except Exception as exc:
+            logger.warning(
+                "replicate.embedding_failed",
+                error_type=type(exc).__name__,
+                error_msg=str(exc)[:160],
+            )
+            return [0.0] * 768
 
     async def _run_replicate(
         self, version: str, input_payload: dict[str, Any], expect: str = "url"
@@ -355,13 +460,32 @@ class ProductionGateway:
 
         Replicate predictions are async — create returns immediately with status='starting',
         and we have to poll the get endpoint until status is succeeded/failed/canceled.
-        Returns the output value (URL string for image models, dict/list for embedding models).
+
+        Retries on 429 (rate limit) and 5xx (transient) with exponential backoff.
+        402 (Payment Required) is a permanent config error — raises immediately.
         """
-        create = await self._http.post(
-            "/predictions",
-            json={"version": version, "input": input_payload},
-        )
-        create.raise_for_status()
+        # Retry the create-call: this is where rate-limiting bites first.
+        delay = 2.0
+        for attempt in range(5):
+            create = await self._http.post(
+                "/predictions",
+                json={"version": version, "input": input_payload},
+            )
+            if create.status_code == 402:
+                raise RuntimeError(
+                    "Replicate returned 402 Payment Required — add billing at "
+                    "https://replicate.com/account/billing"
+                )
+            if create.status_code == 429 or create.status_code >= 500:
+                if attempt == 4:
+                    create.raise_for_status()
+                retry_after = float(create.headers.get("retry-after", delay))
+                await asyncio.sleep(min(retry_after, 30.0))
+                delay = min(delay * 2, 30.0)
+                continue
+            create.raise_for_status()
+            break
+
         pred = create.json()
         get_url = pred["urls"]["get"]
 
@@ -409,6 +533,26 @@ class ProductionGateway:
         text = "".join(b.text for b in msg.content if b.type == "text")
         parsed = _extract_json(text)
         return StylistResult(outfits=parsed["outfits"], model_id=model)
+
+    async def analyze_gaps(
+        self,
+        *,
+        items: list[dict[str, Any]],
+        owner_label: str,
+    ) -> GapAnalysisResult:
+        payload = {"owner_label": owner_label, "items": items}
+        msg = await self._anthropic.messages.create(
+            model=self._anthropic_model,
+            max_tokens=1500,
+            system=_GAP_SYSTEM,
+            messages=[{"role": "user", "content": json.dumps(payload)}],
+        )
+        text = "".join(b.text for b in msg.content if b.type == "text")
+        parsed = _extract_json(text)
+        return GapAnalysisResult(
+            findings=parsed.get("findings", []),
+            model_id=self._anthropic_model,
+        )
 
     async def aclose(self) -> None:
         await self._http.aclose()

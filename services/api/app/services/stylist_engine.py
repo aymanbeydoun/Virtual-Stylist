@@ -216,4 +216,36 @@ async def generate_outfits(
     await db.commit()
     for o in outfits_orm:
         await db.refresh(o, attribute_names=["items"])
+
+    if outfits_orm:
+        await _enqueue_composition(outfits_orm)
+
     return outfits_orm, weather
+
+
+async def _enqueue_composition(outfits: list[Outfit]) -> None:
+    """Schedule each outfit for flat-lay composition.
+
+    Falls back to an inline render when Redis isn't available (eg. tests, single-
+    process dev). Inline keeps the API responsive only if the composition is
+    fast; for 3 outfits at 1080x1080 it's ~100ms — acceptable in dev.
+    """
+    from app.config import get_settings
+    from app.services.outfit_compositor import compose_outfit_image
+
+    settings = get_settings()
+    if settings.ingest_inline:
+        for o in outfits:
+            await compose_outfit_image({}, str(o.id))
+        return
+    try:
+        from arq import create_pool
+        from arq.connections import RedisSettings
+
+        redis = await create_pool(RedisSettings.from_dsn(settings.redis_url))
+        for o in outfits:
+            await redis.enqueue_job("compose_outfit_image", str(o.id))
+        await redis.aclose()
+    except Exception:
+        for o in outfits:
+            await compose_outfit_image({}, str(o.id))
