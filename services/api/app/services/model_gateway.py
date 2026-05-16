@@ -351,6 +351,12 @@ class ProductionGateway:
             headers={"Authorization": f"Token {replicate_api_token}"},
             timeout=httpx.Timeout(60.0, connect=10.0),
         )
+        # Replicate's free / low-credit tier throttles to ~6 req/min with 1 burst.
+        # Even on paid plans, serialising avoids stampedes when the worker
+        # processes a batch. The semaphore guarantees one in-flight prediction
+        # at a time; combined with the 429 retry in _run_replicate, batches
+        # process slowly but reliably without burning credits on retries.
+        self._replicate_semaphore = asyncio.Semaphore(1)
 
     async def remove_background(self, image_bytes: bytes) -> bytes:
         """Replicate-based bg removal. Degrades to a pass-through on any failure
@@ -463,28 +469,41 @@ class ProductionGateway:
 
         Retries on 429 (rate limit) and 5xx (transient) with exponential backoff.
         402 (Payment Required) is a permanent config error — raises immediately.
+        Serialised via a per-gateway semaphore so concurrent ingest jobs don't
+        stampede the rate limiter.
         """
-        # Retry the create-call: this is where rate-limiting bites first.
-        delay = 2.0
-        for attempt in range(5):
-            create = await self._http.post(
-                "/predictions",
-                json={"version": version, "input": input_payload},
-            )
-            if create.status_code == 402:
-                raise RuntimeError(
-                    "Replicate returned 402 Payment Required — add billing at "
-                    "https://replicate.com/account/billing"
+        async with self._replicate_semaphore:
+            # Retry the create-call: this is where rate-limiting bites first.
+            delay = 2.0
+            for attempt in range(6):
+                create = await self._http.post(
+                    "/predictions",
+                    json={"version": version, "input": input_payload},
                 )
-            if create.status_code == 429 or create.status_code >= 500:
-                if attempt == 4:
-                    create.raise_for_status()
-                retry_after = float(create.headers.get("retry-after", delay))
-                await asyncio.sleep(min(retry_after, 30.0))
-                delay = min(delay * 2, 30.0)
-                continue
-            create.raise_for_status()
-            break
+                if create.status_code == 402:
+                    raise RuntimeError(
+                        "Replicate returned 402 Payment Required — add billing at "
+                        "https://replicate.com/account/billing"
+                    )
+                if create.status_code == 429 or create.status_code >= 500:
+                    if attempt == 5:
+                        create.raise_for_status()
+                    # Replicate sets retry_after in the body for 429s; honour that
+                    # if present, otherwise fall back to exponential backoff.
+                    body = (
+                        create.json() if "application/" in create.headers.get("content-type", "")
+                        else {}
+                    )
+                    retry_after = float(
+                        body.get("retry_after")
+                        or create.headers.get("retry-after")
+                        or delay
+                    )
+                    await asyncio.sleep(min(max(retry_after, 1.0) + 1.0, 30.0))
+                    delay = min(delay * 2, 30.0)
+                    continue
+                create.raise_for_status()
+                break
 
         pred = create.json()
         get_url = pred["urls"]["get"]
