@@ -83,7 +83,9 @@ export function ClosetScreen() {
             >
               {item.thumbnail_key ? (
                 <Image
-                  source={{ uri: `${baseUrl}/api/v1/wardrobe/_local_read/${item.thumbnail_key}` }}
+                  source={{
+                    uri: `${baseUrl}/api/v1/wardrobe/_local_read/${item.thumbnail_key}?v=${encodeURIComponent(item.created_at)}`,
+                  }}
                   style={styles.thumb}
                   contentFit="cover"
                 />

@@ -175,7 +175,7 @@ function OutfitCard({ outfit, index, onOpen }: { outfit: Outfit; index: number; 
       {outfit.composite_image_key ? (
         <Image
           source={{
-            uri: `${baseUrl}/api/v1/wardrobe/_local_read/${outfit.composite_image_key}`,
+            uri: `${baseUrl}/api/v1/wardrobe/_local_read/${outfit.composite_image_key}?v=${encodeURIComponent(outfit.created_at)}`,
           }}
           style={styles.composite}
           contentFit="cover"
@@ -187,7 +187,7 @@ function OutfitCard({ outfit, index, onOpen }: { outfit: Outfit; index: number; 
               {oi.item.thumbnail_key ? (
                 <Image
                   source={{
-                    uri: `${baseUrl}/api/v1/wardrobe/_local_read/${oi.item.thumbnail_key}`,
+                    uri: `${baseUrl}/api/v1/wardrobe/_local_read/${oi.item.thumbnail_key}?v=${encodeURIComponent(oi.item.created_at)}`,
                   }}
                   style={styles.outfitThumb}
                   contentFit="cover"
