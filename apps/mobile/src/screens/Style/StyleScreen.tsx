@@ -19,6 +19,7 @@ const baseUrl = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const ADULT_DESTINATIONS: { id: Destination; label: string }[] = [
   { id: "office", label: "Office" },
+  { id: "mall", label: "Mall" },
   { id: "date", label: "Date" },
   { id: "brunch", label: "Brunch" },
   { id: "casual", label: "Casual" },
@@ -30,6 +31,7 @@ const ADULT_DESTINATIONS: { id: Destination; label: string }[] = [
 const KID_DESTINATIONS: { id: Destination; label: string }[] = [
   { id: "school", label: "School" },
   { id: "playground", label: "Playground" },
+  { id: "mall", label: "Mall" },
   { id: "casual", label: "Just hanging out" },
 ];
 
@@ -82,8 +84,10 @@ export function StyleScreen() {
       stylistApi.generate(
         { kind: profile.ownerKind, id: profile.ownerId ?? undefined },
         destination!,
-        mood!,
-        { style: style ?? undefined },
+        {
+          mood: mood ?? undefined,
+          style: style ?? undefined,
+        },
       ),
   });
 
@@ -110,7 +114,9 @@ export function StyleScreen() {
           ))}
         </View>
 
-        <Text style={styles.section}>How do you feel?</Text>
+        <Text style={styles.section}>
+          How do you feel? <Text style={styles.sectionOptional}>(optional)</Text>
+        </Text>
         <View style={styles.chips}>
           {moods.map((m) => (
             <Chip
@@ -118,7 +124,7 @@ export function StyleScreen() {
               label={m.label}
               active={mood === m.id}
               accent={accent}
-              onPress={() => setMood(m.id)}
+              onPress={() => setMood(mood === m.id ? null : m.id)}
             />
           ))}
         </View>
@@ -139,8 +145,8 @@ export function StyleScreen() {
         </View>
 
         <Pressable
-          style={[styles.cta, { backgroundColor: accent }, (!destination || !mood) && { opacity: 0.4 }]}
-          disabled={!destination || !mood || generate.isPending}
+          style={[styles.cta, { backgroundColor: accent }, !destination && { opacity: 0.4 }]}
+          disabled={!destination || generate.isPending}
           onPress={() => generate.mutate()}
         >
           {generate.isPending ? (

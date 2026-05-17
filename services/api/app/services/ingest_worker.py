@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import io
 import uuid
 from typing import Any, ClassVar
 
+import pillow_heif
 import structlog
 from arq.connections import RedisSettings
+from PIL import Image
 from sqlalchemy import select
 
 from app.config import get_settings
@@ -14,6 +17,33 @@ from app.models.wardrobe import Pattern, WardrobeItem
 from app.services.model_gateway import get_model_gateway
 from app.services.outfit_compositor import compose_outfit_image
 from app.services.tryon_worker import tryon_outfit
+
+# Register HEIF/HEIC decoder so Pillow can open iPhone Camera default exports.
+pillow_heif.register_heif_opener()
+
+
+def _normalise_to_jpeg(raw: bytes) -> bytes:
+    """Decode any Pillow-supported image and re-encode as JPEG.
+
+    iPhones save photos as HEIC by default. Replicate's models and Claude Vision
+    refuse anything that isn't JPEG/PNG/GIF/WebP — even when the file has a
+    .jpg extension. Decoding via Pillow + re-encoding as JPEG is a safe pass:
+    real JPEGs round-trip identically (to within transcoding noise), HEIC gets
+    converted, and corrupt bytes raise here instead of mysteriously failing
+    300 lines downstream.
+    """
+    img: Image.Image = Image.open(io.BytesIO(raw))
+    if img.mode in ("RGBA", "P", "LA"):
+        # JPEG can't carry alpha; composite onto white so transparent regions
+        # show as white rather than going black.
+        background = Image.new("RGB", img.size, (255, 255, 255))
+        background.paste(img, mask=img.split()[-1] if img.mode != "P" else None)
+        img = background
+    elif img.mode != "RGB":
+        img = img.convert("RGB")
+    out = io.BytesIO()
+    img.save(out, format="JPEG", quality=90, optimize=True)
+    return out.getvalue()
 
 logger = structlog.get_logger()
 
@@ -55,6 +85,24 @@ async def ingest_item(ctx: dict[str, Any], item_id: str) -> None:
         try:
             raw = await storage.read_bytes(item.raw_image_key)
         except FileNotFoundError:
+            item.status = "failed"
+            await db.commit()
+            return
+
+        # Normalise HEIC / oddball formats to JPEG before anything else touches
+        # them. iPhone Camera defaults to HEIC; Replicate + Claude can't decode.
+        try:
+            raw = _normalise_to_jpeg(raw)
+            # Persist the normalised JPEG so subsequent re-runs + the mobile
+            # preview both work without re-converting.
+            await storage.write_bytes(item.raw_image_key, raw)
+        except Exception as exc:
+            logger.warning(
+                "item.normalise_failed",
+                item_id=str(item.id),
+                error_type=type(exc).__name__,
+                error_msg=str(exc)[:200],
+            )
             item.status = "failed"
             await db.commit()
             return

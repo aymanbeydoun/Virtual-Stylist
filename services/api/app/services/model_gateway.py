@@ -94,7 +94,7 @@ class ModelGateway(Protocol):
         *,
         candidates: list[dict[str, Any]],
         destination: str,
-        mood: str,
+        mood: str | None,
         weather: WeatherSnapshot | None,
         notes: str | None,
         kid_mode: bool,
@@ -173,7 +173,7 @@ class StubGateway:
         *,
         candidates: list[dict[str, Any]],
         destination: str,
-        mood: str,
+        mood: str | None,
         weather: WeatherSnapshot | None,
         notes: str | None,
         kid_mode: bool,
@@ -192,11 +192,14 @@ class StubGateway:
                 if i < len(items):
                     picked.append({"item_id": items[i]["id"], "slot": slot})
             if picked:
+                rationale_prefix = (
+                    f"A {mood} look" if mood else "A versatile look"
+                )
                 outfits.append(
                     {
                         "items": picked,
                         "rationale": (
-                            f"A {mood} look for {destination.replace('_', ' ')}"
+                            f"{rationale_prefix} for {destination.replace('_', ' ')}"
                             + (f" — packed for {weather.condition}." if weather else ".")
                         ),
                         "confidence": 0.78,
@@ -312,6 +315,10 @@ You receive a JSON payload with: destination, mood, style, weather, notes, kid_m
 list of `candidates`. Each candidate has: id, slot (top|bottom|dress|shoes|outerwear|accessory), \
 category, colors, pattern, formality, seasonality.
 
+`mood` is the wearer's emotional state for this outing. When null, pick a mood that \
+fits the destination + style and mention it in the rationale ("a confident, \
+modern take on…"). Vocabulary: confident, cozy, edgy, playful, minimal, romantic.
+
 `style` is the aesthetic tradition the user wants to dress within. When set, honour it. \
 The vocabulary:
 - streetwear: oversized fits, sneakers, graphic/branded pieces, hoodies/bombers, layered.
@@ -329,7 +336,9 @@ Compose 2-3 complete outfits. Hard rules:
 - Each outfit MUST include either (a) one top + one bottom, OR (b) one dress.
 - Never repeat the same item across outfits.
 - Respect the weather (temp_c, condition). Cold/rain → outerwear, never sandals.
-- Match formality to destination (office=6-8, date=6-9, playground=2-4, gym=1-3).
+- Match formality to destination:
+  office=6-8, date=6-9, brunch=3-7, formal_event=8-10, casual=1-6, school=1-5,
+  playground=0-4, gym=0-3, travel=2-6, mall=2-7 (smart-casual is the UAE default).
 - Include accessories (jewelry/belt/hat/bag) when they elevate the look.
 
 Output ONLY this JSON, no markdown:
@@ -671,7 +680,7 @@ class ProductionGateway:
         *,
         candidates: list[dict[str, Any]],
         destination: str,
-        mood: str,
+        mood: str | None,
         weather: WeatherSnapshot | None,
         notes: str | None,
         kid_mode: bool,

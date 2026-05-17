@@ -42,7 +42,7 @@ export interface UploadUrlResponse {
 
 export type Destination =
   | "office" | "date" | "brunch" | "gym" | "playground"
-  | "school" | "travel" | "formal_event" | "casual";
+  | "school" | "travel" | "formal_event" | "casual" | "mall";
 
 export type Mood = "confident" | "cozy" | "edgy" | "playful" | "minimal" | "romantic";
 

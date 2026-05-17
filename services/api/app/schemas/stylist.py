@@ -9,7 +9,8 @@ from app.schemas.common import WeatherSnapshot
 from app.schemas.wardrobe import WardrobeItemOut
 
 Destination = Literal[
-    "office", "date", "brunch", "gym", "playground", "school", "travel", "formal_event", "casual"
+    "office", "date", "brunch", "gym", "playground", "school",
+    "travel", "formal_event", "casual", "mall",
 ]
 Mood = Literal["confident", "cozy", "edgy", "playful", "minimal", "romantic"]
 # Aesthetic / style preference — orthogonal to mood (emotional state). Mood is
@@ -28,7 +29,7 @@ Style = Literal[
 
 class GenerateOutfitRequest(BaseModel):
     destination: Destination
-    mood: Mood
+    mood: Mood | None = None
     style: Style | None = None
     notes: str | None = Field(default=None, max_length=500)
     owner_kind: OwnerKind = OwnerKind.user

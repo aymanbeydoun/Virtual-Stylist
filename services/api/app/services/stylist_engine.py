@@ -56,6 +56,8 @@ _DESTINATION_FORMALITY = {
     "playground": (0, 4),
     "gym": (0, 3),
     "travel": (2, 6),
+    # UAE-specific: mall trips skew smart-casual but cover a wide range.
+    "mall": (2, 7),
 }
 
 
@@ -173,7 +175,7 @@ async def generate_outfits(
     owner_kind: OwnerKind,
     owner_id: uuid.UUID,
     destination: str,
-    mood: str,
+    mood: str | None,
     notes: str | None,
     kid_mode: bool,
     style: str | None = None,

@@ -9,6 +9,7 @@ import { wardrobeApi } from "@/api/wardrobe";
 import { useActiveProfile } from "@/state/profile";
 import { palette, radii, spacing } from "@/theme";
 import { isIosSimulator } from "@/utils/device";
+import { ensureJpeg } from "@/utils/image";
 
 export function AddItemScreen() {
   const nav = useNavigation();
@@ -18,12 +19,15 @@ export function AddItemScreen() {
 
   const upload = useMutation({
     mutationFn: async (uri: string) => {
-      setStatus("Preparing upload…");
+      setStatus("Preparing photo…");
+      // iPhone Camera returns HEIC by default; convert to JPEG before upload.
+      const jpegUri = await ensureJpeg(uri);
+
       const owner = { kind: profile.ownerKind, id: profile.ownerId ?? undefined };
       const signed = await wardrobeApi.createUploadUrl("image/jpeg", owner);
 
       setStatus("Uploading photo…");
-      await wardrobeApi.uploadFileUri(signed.upload_url, uri, "image/jpeg");
+      await wardrobeApi.uploadFileUri(signed.upload_url, jpegUri, "image/jpeg");
 
       setStatus("Tagging with AI…");
       return wardrobeApi.createItem(signed.object_key, owner);

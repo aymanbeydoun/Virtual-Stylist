@@ -20,6 +20,7 @@ import { wardrobeApi } from "@/api/wardrobe";
 import { useActiveProfile } from "@/state/profile";
 import { palette, radii, spacing } from "@/theme";
 import { isIosSimulator } from "@/utils/device";
+import { ensureJpeg } from "@/utils/image";
 
 const baseUrl = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -38,13 +39,12 @@ export function BasePhotoScreen() {
 
   const upload = useMutation({
     mutationFn: async (uri: string) => {
-      setStatus("Preparing upload…");
+      setStatus("Preparing photo…");
+      const jpegUri = await ensureJpeg(uri);
       const signed = await tryonApi.createBasePhotoUploadUrl("image/jpeg", owner);
 
       setStatus("Uploading photo…");
-      // Same upload helper as wardrobe — handles file:// URIs without the
-      // flaky fetch+blob dance that fails on iOS Simulator photo picker URIs.
-      await wardrobeApi.uploadFileUri(signed.upload_url, uri, "image/jpeg");
+      await wardrobeApi.uploadFileUri(signed.upload_url, jpegUri, "image/jpeg");
 
       setStatus("Saving…");
       return tryonApi.commitBasePhoto(signed.object_key, owner);

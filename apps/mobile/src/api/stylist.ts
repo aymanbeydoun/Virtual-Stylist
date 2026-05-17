@@ -5,14 +5,13 @@ export const stylistApi = {
   async generate(
     owner: { kind: OwnerKind; id?: string },
     destination: Destination,
-    mood: Mood,
-    options?: { style?: Style; notes?: string },
+    options?: { mood?: Mood; style?: Style; notes?: string },
   ) {
     return api<GenerateOutfitResponse>("/stylist/generate", {
       method: "POST",
       json: {
         destination,
-        mood,
+        mood: options?.mood,
         style: options?.style,
         notes: options?.notes,
         owner_kind: owner.kind,
