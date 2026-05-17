@@ -23,7 +23,8 @@
     },
     "plugins": [
       "expo-image-picker",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-web-browser"
     ],
     "extra": {
       "apiUrl": "http://localhost:8000"

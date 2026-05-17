@@ -29,8 +29,11 @@ export interface WardrobeItem {
   pattern: string | null;
   formality: number | null;
   seasonality: string[];
+  attributes?: Record<string, unknown>;
+  quality_tier?: "standard" | "premium";
   needs_review: boolean;
   status: "pending" | "ready" | "failed";
+  failure_reason?: string | null;
   created_at: string;
 }
 
@@ -42,9 +45,20 @@ export interface UploadUrlResponse {
 
 export type Destination =
   | "office" | "date" | "brunch" | "gym" | "playground"
-  | "school" | "travel" | "formal_event" | "casual";
+  | "school" | "travel" | "formal_event" | "casual" | "mall"
+  | "wedding" | "restaurant" | "beach" | "park" | "religious";
 
 export type Mood = "confident" | "cozy" | "edgy" | "playful" | "minimal" | "romantic";
+
+export type Style =
+  | "streetwear"
+  | "minimal"
+  | "classic"
+  | "preppy"
+  | "bohemian"
+  | "athleisure"
+  | "avant_garde"
+  | "smart_casual";
 
 export interface Outfit {
   id: string;
@@ -60,4 +74,63 @@ export interface Outfit {
 export interface GenerateOutfitResponse {
   outfits: Outfit[];
   weather: { temp_c: number; condition: string; wind_kph: number } | null;
+}
+
+export type GapSeverity = "high" | "medium" | "low";
+export type GapStatus = "open" | "dismissed" | "resolved";
+
+export interface GapFinding {
+  id: string;
+  slot: string;
+  category_hint: string | null;
+  title: string;
+  rationale: string | null;
+  severity: GapSeverity;
+  status: GapStatus;
+  search_query: string | null;
+  created_at: string;
+}
+
+export type TryonStatus = "pending" | "ready" | "failed";
+
+export type Angle = "front" | "left_3q" | "back" | "right_3q";
+export const ANGLES: readonly Angle[] = ["front", "left_3q", "back", "right_3q"];
+
+export const ANGLE_LABEL: Record<Angle, string> = {
+  front: "Front",
+  left_3q: "3/4 left",
+  back: "Back",
+  right_3q: "3/4 right",
+};
+
+export const ANGLE_HINT: Record<Angle, string> = {
+  front: "Face the camera, arms relaxed at your sides.",
+  left_3q: "Turn your body about 45° to the right (camera sees your left 3/4).",
+  back: "Turn fully away from the camera.",
+  right_3q: "Turn your body about 45° to the left (camera sees your right 3/4).",
+};
+
+export interface OutfitTryon {
+  id: string;
+  outfit_id: string;
+  base_photo_key: string;
+  angle: Angle | null;
+  rendered_image_key: string | null;
+  status: TryonStatus;
+  model_id: string | null;
+  error_message: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface OutfitTryonSet {
+  renders: OutfitTryon[];
+}
+
+export interface BasePhoto {
+  base_photo_key: string | null;
+}
+
+export interface BasePhotoSet {
+  base_photo_keys: Partial<Record<Angle, string>>;
 }

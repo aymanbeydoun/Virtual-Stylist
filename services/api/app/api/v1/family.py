@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.core.auth import CurrentUser
 from app.db import get_db
 from app.models.family import FamilyMember, FamilyMemberKind, KidConsent
@@ -35,10 +36,21 @@ async def create_member(
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> FamilyMember:
-    if body.kind == FamilyMemberKind.kid and not body.consent_method:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "consent_method is required for kid sub-profiles"
-        )
+    if body.kind == FamilyMemberKind.kid:
+        if not get_settings().feature_kid_signup_enabled:
+            # Hard gate: kid creation is locked until Verifiable Parental Consent
+            # is wired (see docs/legal/COPPA.md). The mobile must call this
+            # endpoint only when the user has completed the VPC flow upstream.
+            raise HTTPException(
+                status.HTTP_412_PRECONDITION_FAILED,
+                "Kid sub-profiles are temporarily disabled. The Verifiable "
+                "Parental Consent flow is in legal review.",
+            )
+        if not body.consent_method:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "consent_method is required for kid sub-profiles",
+            )
 
     if user.role != UserRole.guardian:
         user.role = UserRole.guardian  # promote on first family-member creation

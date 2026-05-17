@@ -13,18 +13,26 @@ export class ApiError extends Error {
   }
 }
 
+function authHeaders(): Record<string, string> {
+  const session = useAuth.getState().session;
+  if (!session) return {};
+  if (session.mode === "auth0") {
+    return { Authorization: `Bearer ${session.accessToken}` };
+  }
+  return { "X-Dev-User-Id": session.devUserId };
+}
+
 export async function api<T>(
   path: string,
   init: RequestInit & { json?: unknown } = {},
 ): Promise<T> {
   const { json, headers, ...rest } = init;
-  const token = useAuth.getState().devUserId;
 
   const resp = await fetch(`${baseUrl}/api/v1${path}`, {
     ...rest,
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { "X-Dev-User-Id": token } : {}),
+      ...authHeaders(),
       ...(headers ?? {}),
     },
     body: json !== undefined ? JSON.stringify(json) : (rest.body as BodyInit | null | undefined),

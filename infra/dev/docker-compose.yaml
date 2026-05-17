@@ -5,11 +5,11 @@ services:
       POSTGRES_USER: stylist
       POSTGRES_PASSWORD: stylist
       POSTGRES_DB: virtual_stylist
-    ports: ["5432:5432"]
+    ports: ["5433:5432"]
     volumes:
       - db_data:/var/lib/postgresql/data
   redis:
     image: redis:7
-    ports: ["6379:6379"]
+    ports: ["6380:6379"]
 volumes:
   db_data:

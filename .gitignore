@@ -45,3 +45,8 @@ logs/
 
 # Local artifacts
 storage/
+
+# Smoke-test outputs (per-developer, not committed)
+services/api/smoke_sam2_output/
+services/api/smoke_tryon_output/
+services/api/bench_output/

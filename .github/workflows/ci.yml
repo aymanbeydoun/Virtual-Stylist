@@ -35,21 +35,21 @@ jobs:
       - run: uv run mypy app
       - name: Migration round-trip (upgrade → downgrade → upgrade)
         env:
-          DATABASE_URL: postgresql+asyncpg://stylist:stylist@localhost:5432/virtual_stylist
+          DATABASE_URL: "postgresql+asyncpg://stylist:stylist@localhost:5432/virtual_stylist"
         run: |
           uv run alembic upgrade head
           uv run alembic downgrade base
           uv run alembic upgrade head
       - name: Unit tests
         env:
-          DATABASE_URL: sqlite+aiosqlite:///:memory:
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
           DEV_AUTH_BYPASS: "true"
         run: uv run pytest -q tests --ignore=tests/integration
       - name: Postgres integration tests
         env:
-          DATABASE_URL: postgresql+asyncpg://stylist:stylist@localhost:5432/virtual_stylist
-          INTEGRATION_DATABASE_URL: postgresql+asyncpg://stylist:stylist@localhost:5432/virtual_stylist
-          REDIS_URL: redis://localhost:6379/0
+          DATABASE_URL: "postgresql+asyncpg://stylist:stylist@localhost:5432/virtual_stylist"
+          INTEGRATION_DATABASE_URL: "postgresql+asyncpg://stylist:stylist@localhost:5432/virtual_stylist"
+          REDIS_URL: "redis://localhost:6379/0"
           DEV_AUTH_BYPASS: "true"
           STORAGE_BACKEND: local
         run: uv run pytest -q tests/integration
@@ -67,7 +67,8 @@ jobs:
         with:
           node-version: 20
           cache: "pnpm"
-      - run: pnpm install
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
         working-directory: ${{ github.workspace }}
       - run: pnpm typecheck
       - run: pnpm lint

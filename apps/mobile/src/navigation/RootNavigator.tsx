@@ -1,18 +1,24 @@
+import { Ionicons } from "@expo/vector-icons";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { Text } from "react-native";
 
 import { useAuth } from "@/state/auth";
 import { useActiveProfile } from "@/state/profile";
 import { palette } from "@/theme";
 import { AddItemScreen } from "@/screens/Closet/AddItemScreen";
 import { ClosetScreen } from "@/screens/Closet/ClosetScreen";
+import { GapsScreen } from "@/screens/Closet/GapsScreen";
 import { ItemDetailScreen } from "@/screens/Closet/ItemDetailScreen";
+import { ScanReviewScreen } from "@/screens/Closet/ScanReviewScreen";
 import { FamilyScreen } from "@/screens/Family/FamilyScreen";
 import { AddMemberScreen } from "@/screens/Family/AddMemberScreen";
 import { SignInScreen } from "@/screens/Auth/SignInScreen";
 import { StyleScreen } from "@/screens/Style/StyleScreen";
 import { OutfitDetailScreen } from "@/screens/Style/OutfitDetailScreen";
+import { BasePhotoScreen } from "@/screens/You/BasePhotoScreen";
+import { BodyShapeScreen } from "@/screens/You/BodyShapeScreen";
+import { GenderScreen } from "@/screens/You/GenderScreen";
+import { StylePreferenceScreen } from "@/screens/You/StylePreferenceScreen";
 import { YouScreen } from "@/screens/You/YouScreen";
 
 export type RootStackParamList = {
@@ -22,55 +28,72 @@ export type RootStackParamList = {
   AddMember: undefined;
   OutfitDetail: { outfitId: string };
   SignIn: undefined;
+  Gaps: undefined;
+  BasePhoto: undefined;
+  StylePreference: undefined;
+  BodyShape: undefined;
+  Gender: undefined;
+  ScanReview: {
+    regions: { preview_key: string; bbox: number[]; label: string | null }[];
+  };
 };
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-function TabBarIcon({ label, focused }: { label: string; focused: boolean }) {
-  return (
-    <Text style={{ fontSize: 18, opacity: focused ? 1 : 0.5 }}>{label}</Text>
-  );
-}
+/**
+ * Tab icons use Ionicons — a single icon family for consistency, outlined
+ * when inactive and filled when active (iOS-native convention).
+ * All four icons are gender-neutral and minimal.
+ */
+type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
+
+const TAB_ICONS: Record<string, { outline: IoniconName; filled: IoniconName }> = {
+  Closet: { outline: "shirt-outline", filled: "shirt" },
+  Style: { outline: "sparkles-outline", filled: "sparkles" },
+  Family: { outline: "people-outline", filled: "people" },
+  You: { outline: "person-outline", filled: "person" },
+};
 
 function Tabs() {
   const isKidMode = useActiveProfile((s) => s.isKidMode);
   const activeColor = isKidMode ? palette.kidPrimary : palette.accent;
   return (
     <Tab.Navigator
-      screenOptions={{
+      screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: activeColor,
         tabBarInactiveTintColor: palette.textMuted,
-        tabBarStyle: { backgroundColor: palette.background, borderTopColor: palette.surfaceAlt },
-      }}
+        tabBarStyle: {
+          backgroundColor: palette.background,
+          borderTopColor: palette.surfaceAlt,
+          height: 84,
+          paddingTop: 8,
+        },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "600", letterSpacing: 0.3 },
+        tabBarIcon: ({ focused, color, size }) => {
+          const icons = TAB_ICONS[route.name];
+          if (!icons) return null;
+          return (
+            <Ionicons
+              name={focused ? icons.filled : icons.outline}
+              size={size ?? 24}
+              color={color}
+            />
+          );
+        },
+      })}
     >
-      <Tab.Screen
-        name="Closet"
-        component={ClosetScreen}
-        options={{ tabBarIcon: ({ focused }) => <TabBarIcon label="👚" focused={focused} /> }}
-      />
-      <Tab.Screen
-        name="Style"
-        component={StyleScreen}
-        options={{ tabBarIcon: ({ focused }) => <TabBarIcon label="✨" focused={focused} /> }}
-      />
-      <Tab.Screen
-        name="Family"
-        component={FamilyScreen}
-        options={{ tabBarIcon: ({ focused }) => <TabBarIcon label="👪" focused={focused} /> }}
-      />
-      <Tab.Screen
-        name="You"
-        component={YouScreen}
-        options={{ tabBarIcon: ({ focused }) => <TabBarIcon label="👤" focused={focused} /> }}
-      />
+      <Tab.Screen name="Closet" component={ClosetScreen} />
+      <Tab.Screen name="Style" component={StyleScreen} />
+      <Tab.Screen name="Family" component={FamilyScreen} />
+      <Tab.Screen name="You" component={YouScreen} />
     </Tab.Navigator>
   );
 }
 
 export function RootNavigator() {
-  const signedIn = useAuth((s) => s.devUserId !== null);
+  const signedIn = useAuth((s) => s.session !== null);
   return (
     <Stack.Navigator
       screenOptions={{
@@ -91,6 +114,32 @@ export function RootNavigator() {
             name="OutfitDetail"
             component={OutfitDetailScreen}
             options={{ title: "Outfit" }}
+          />
+          <Stack.Screen name="Gaps" component={GapsScreen} options={{ title: "Closet gaps" }} />
+          <Stack.Screen
+            name="BasePhoto"
+            component={BasePhotoScreen}
+            options={{ title: "Your photo" }}
+          />
+          <Stack.Screen
+            name="StylePreference"
+            component={StylePreferenceScreen}
+            options={{ title: "Default style" }}
+          />
+          <Stack.Screen
+            name="BodyShape"
+            component={BodyShapeScreen}
+            options={{ title: "Body shape" }}
+          />
+          <Stack.Screen
+            name="Gender"
+            component={GenderScreen}
+            options={{ title: "Gender preference" }}
+          />
+          <Stack.Screen
+            name="ScanReview"
+            component={ScanReviewScreen}
+            options={{ title: "Review items" }}
           />
         </>
       )}
