@@ -354,7 +354,7 @@ function TryonSetView({
         <Text style={styles.tryonSubText}>
           We render you in the FULL outfit — top + bottom + outerwear —
           one garment at a time. Takes ~75-100 seconds. The wait is the
-          price of identity preservation (it's actually you, not an
+          price of identity preservation (it&apos;s actually you, not an
           AI-generated stranger). Render all 4 angles after the first
           one finishes if you want the carousel.
         </Text>
