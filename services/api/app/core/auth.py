@@ -178,17 +178,38 @@ async def get_current_user(
     authorization: Annotated[str | None, Header()] = None,
     x_dev_user_id: Annotated[str | None, Header()] = None,
 ) -> User:
+    """Resolve the current user, preferring real Auth0 tokens over the dev header.
+
+    Precedence:
+      1. If a Bearer token is present AND the issuer is configured, verify it.
+         This wins even when DEV_AUTH_BYPASS=true, so a mobile build that's
+         already migrated to Auth0 doesn't accidentally fall through to dev
+         provisioning.
+      2. Else, if DEV_AUTH_BYPASS=true, trust X-Dev-User-Id.
+      3. Else, 401.
+    """
     settings = get_settings()
+
+    has_bearer = bool(
+        authorization and authorization.lower().startswith("bearer ")
+    )
+    issuer_configured = bool(settings.auth_jwks_url and settings.auth_issuer)
+
+    if has_bearer and issuer_configured:
+        assert authorization is not None
+        token = authorization.split(" ", 1)[1].strip()
+        claims = await _verify_jwt(token)
+        return await _user_from_claims(db, claims)
 
     if settings.dev_auth_bypass:
         return await _get_or_create_dev_user(db, x_dev_user_id)
 
-    if not authorization or not authorization.lower().startswith("bearer "):
+    if not has_bearer:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "missing bearer token")
-    token = authorization.split(" ", 1)[1].strip()
-
-    claims = await _verify_jwt(token)
-    return await _user_from_claims(db, claims)
+    # Bearer present but issuer not configured — config error, not user error.
+    raise HTTPException(
+        status.HTTP_501_NOT_IMPLEMENTED, "AUTH_JWKS_URL / AUTH_ISSUER not set"
+    )
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]

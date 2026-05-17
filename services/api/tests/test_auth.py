@@ -145,9 +145,16 @@ def test_verify_jwt_rejects_wrong_audience(
     assert exc.value.status_code == 401
 
 
-def test_verify_jwt_503_when_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("AUTH_ISSUER", "")
-    monkeypatch.setenv("AUTH_JWKS_URL", "")
+def test_verify_jwt_503_when_unconfigured(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    # Chdir to an empty tmp dir so pydantic-settings can't find a real .env
+    # leaking the configured Auth0 issuer back in via the "env-empty falls
+    # back to .env" rule in config.py.
+    monkeypatch.chdir(tmp_path)  # type: ignore[arg-type]
+    monkeypatch.delenv("AUTH_ISSUER", raising=False)
+    monkeypatch.delenv("AUTH_JWKS_URL", raising=False)
+    monkeypatch.delenv("AUTH_AUDIENCE", raising=False)
     get_settings.cache_clear()
     with pytest.raises(HTTPException) as exc:
         asyncio.run(_verify_jwt("any-token"))

@@ -125,7 +125,7 @@ async def seed() -> None:
         async def add_closet(
             owner_kind: OwnerKind,
             owner_id: uuid.UUID,
-            closet: list[tuple[str, "Pattern", str, str, int, list[str]]],
+            closet: list[tuple[str, Pattern, str, str, int, list[str]]],
         ) -> int:
             existing = (
                 await db.execute(

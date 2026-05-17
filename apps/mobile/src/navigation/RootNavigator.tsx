@@ -85,7 +85,7 @@ function Tabs() {
 }
 
 export function RootNavigator() {
-  const signedIn = useAuth((s) => s.devUserId !== null);
+  const signedIn = useAuth((s) => s.session !== null);
   return (
     <Stack.Navigator
       screenOptions={{
