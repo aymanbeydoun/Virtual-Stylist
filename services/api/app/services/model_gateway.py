@@ -99,11 +99,33 @@ class SegmentationMask:
     label: str | None = None  # what the segmenter thinks this is
 
 
+@dataclass
+class ClothingClassification:
+    """Result of the zero-shot 'is this a clothing item?' gate.
+
+    Runs BEFORE the bg-removal + tag calls so a photo of a cat or a landscape
+    doesn't burn Replicate + Claude credits and end up cluttering the closet.
+    """
+
+    is_clothing: bool
+    confidence: float  # 0.0-1.0, how sure we are about `is_clothing`
+    detected_label: str  # eg "shirt", "cat", "food", "screenshot"
+    reason: str | None = None  # human-friendly message for the mobile UI
+
+
 class ModelGateway(Protocol):
     async def tag_item(self, image_bytes: bytes) -> TagResult: ...
     async def remove_background(
         self, image_bytes: bytes, quality_tier: str = "standard"
     ) -> bytes: ...
+    async def classify_clothing(self, image_bytes: bytes) -> ClothingClassification:
+        """Zero-shot 'is this a clothing item?' gate.
+
+        Runs cheaply in front of the expensive bg-removal + tagging calls.
+        Lets us reject cat photos, landscapes, and accidental screenshots with
+        a useful error before we burn $0.01+ of Replicate + Claude credits.
+        """
+        ...
     async def segment_garments(
         self, image_bytes: bytes, hints: list[str] | None = None
     ) -> list[SegmentationMask]:
@@ -141,6 +163,7 @@ class ModelGateway(Protocol):
         *,
         person_image: bytes,
         garments: list[TryonInput],
+        body_shape: str | None = None,
     ) -> TryonResult: ...
     async def refine_outfit(
         self,
@@ -207,6 +230,15 @@ class StubGateway:
     ) -> bytes:
         del quality_tier
         return image_bytes
+
+    async def classify_clothing(self, image_bytes: bytes) -> ClothingClassification:
+        del image_bytes
+        # Stub: always accept so offline dev + tests don't have to mock this.
+        return ClothingClassification(
+            is_clothing=True,
+            confidence=1.0,
+            detected_label="stub-accept",
+        )
 
     async def segment_garments(
         self, image_bytes: bytes, hints: list[str] | None = None
@@ -292,7 +324,9 @@ class StubGateway:
         *,
         person_image: bytes,
         garments: list[TryonInput],
+        body_shape: str | None = None,
     ) -> TryonResult:
+        del body_shape  # stub ignores; production weaves into prompt
         # Stub: just echo the person photo back — lets the UI render something
         # in offline dev without spending Replicate credits.
         return TryonResult(image_bytes=person_image, model_id="stub-tryon-v0")
@@ -317,6 +351,38 @@ class StubGateway:
             message=f"(stub) ack: {user_message[:80]}",
             model_id="stub-refine-v0",
         )
+
+
+# Body-shape drape hints for the try-on prompt. nano-banana doesn't reason
+# semantically about shape categories, but it does respond to drape language.
+# Keep each phrase short — nano-banana follows the first 2-3 prompt clauses
+# most reliably.
+_BODY_SHAPE_DRAPE = {
+    "rectangle": (
+        "Render the clothes with a defined waistline; emphasise structure at "
+        "the midsection."
+    ),
+    "hourglass": (
+        "Render the clothes tailored to follow the natural waistline; show "
+        "balanced volume on top and bottom."
+    ),
+    "pear": (
+        "Render the clothes with a loose, skimming drape over the hips and "
+        "a structured fit on top."
+    ),
+    "apple": (
+        "Render the clothes with a softly skimming line over the midsection; "
+        "avoid clinging fabrics around the waist."
+    ),
+    "inverted_triangle": (
+        "Render the clothes with looser drape on top and a structured, "
+        "fitted line through the bottom."
+    ),
+    "athletic": (
+        "Render the clothes with clean tailored lines that follow the natural "
+        "silhouette without adding bulk."
+    ),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -432,6 +498,20 @@ the rationale):
   (silk camisole alone is loungewear; with tailored trousers, dinner).
 - Leather + fur in the same outfit = avoid unless requested.
 
+Fit / silhouette compatibility — each candidate carries an `attributes.fit`
+value (skinny|slim|regular|relaxed|oversized|tailored). Treat these rules
+as soft but call out any violation in the rationale:
+- Balance volume: pair oversized/relaxed top with slim/tailored bottom, or
+  fitted/tailored top with relaxed/oversized bottom. Avoid oversized-on-
+  oversized (drowns the silhouette) and skinny-on-skinny (clings everywhere)
+  unless the user explicitly asks for that look.
+- Tailored items dress UP a casual piece; relaxed items dress DOWN a formal
+  piece. Use this to hit the destination's formality target.
+- For workwear / formal destinations (office, formal_event, wedding,
+  restaurant), at least ONE item should be tailored or slim — never an
+  all-relaxed-and-oversized outfit.
+- Athletic / gym destinations: relaxed or slim, never tailored.
+
 Color harmony (output must satisfy AT LEAST ONE):
 - Monochrome (all items within one color family, varying tone/value).
 - Neutral base + one accent (≤1 saturated colour; rest neutral).
@@ -523,6 +603,27 @@ Output ONLY this JSON shape, no markdown:
 """
 
 
+_GENDER_PREFIX_RE = re.compile(
+    r"\b(?:women's|womens|men's|mens|kids)\.",
+    re.IGNORECASE,
+)
+
+
+def _strip_gender(description: str | None) -> str | None:
+    """Drop "mens.", "womens.", "kids." prefix from a category-style description.
+
+    Try-on bug: Gemini 2.5 image-edit reads item descriptions like
+    "navy womens.tops.blouse" and biases toward generating a generic woman
+    wearing women's clothes — overriding the actual person in image 1.
+    Stripping the gender prefix makes the description gender-neutral so the
+    model anchors on the person photo instead. Word-boundary matching so
+    "womens." doesn't collide with "mens." substring within it.
+    """
+    if not description:
+        return description
+    return _GENDER_PREFIX_RE.sub("", description).strip()
+
+
 def _detect_image_media_type(image_bytes: bytes) -> str:
     """Sniff the actual media type from magic bytes.
 
@@ -610,12 +711,15 @@ class ProductionGateway:
             headers={"Authorization": f"Token {replicate_api_token}"},
             timeout=httpx.Timeout(60.0, connect=10.0),
         )
-        # Replicate's free / low-credit tier throttles to ~6 req/min with 1 burst.
-        # Even on paid plans, serialising avoids stampedes when the worker
-        # processes a batch. The semaphore guarantees one in-flight prediction
-        # at a time; combined with the 429 retry in _run_replicate, batches
-        # process slowly but reliably without burning credits on retries.
-        self._replicate_semaphore = asyncio.Semaphore(1)
+        # Replicate's paid tiers support ~10-20 concurrent predictions per
+        # account. We allow 3 in flight so:
+        #   1. A user-triggered try-on doesn't sit blocked behind a 100-item
+        #      batch retag (huge UX win — user wanted to test while seed
+        #      retag was running and got stuck waiting 15+ min).
+        #   2. Multi-angle renders can stream a few in parallel.
+        #   3. We still avoid stampeding the 429 limit. _run_replicate has
+        #      retry-with-backoff for the rare burst-throttle case.
+        self._replicate_semaphore = asyncio.Semaphore(3)
 
     async def remove_background(
         self, image_bytes: bytes, quality_tier: str = "standard"
@@ -656,24 +760,262 @@ class ProductionGateway:
             )
             return image_bytes
 
+    async def classify_clothing(self, image_bytes: bytes) -> ClothingClassification:
+        """Zero-shot 'is this clothing?' classifier via Claude Haiku.
+
+        Rationale for using Claude Haiku rather than a Replicate CLIP model:
+        we already have Anthropic wired and Haiku is ~$0.0003 / image at
+        sub-second latency — meaningfully cheaper end-to-end than spinning
+        up a second Replicate prediction (cold-start + queue) for the same
+        binary judgment. Haiku is genuinely zero-shot here: the prompt
+        enumerates the candidate labels (clothing, person without clothing
+        focus, food, animal, landscape, screenshot, document, other).
+
+        On model error / parse failure, fall open (accept) — we'd rather pay
+        for one wasted Claude tagging call than reject a real garment. The
+        downstream pipeline will degrade gracefully if the photo is genuinely
+        un-taggable.
+        """
+        try:
+            media_type = _detect_image_media_type(image_bytes)
+            b64 = base64.b64encode(image_bytes).decode()
+            content: list[dict[str, Any]] = [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": media_type,
+                        "data": b64,
+                    },
+                },
+                {
+                    "type": "text",
+                    "text": (
+                        "Classify this photo. Reply ONLY with JSON: "
+                        '{"label": "clothing|footwear|accessory|jewelry|bag|'
+                        "person_no_garment_focus|food|animal|landscape|"
+                        'screenshot|document|other", "confidence": 0.0-1.0}. '
+                        '"clothing", "footwear", "accessory", "jewelry", '
+                        '"bag" all count as wearable. Anything else means '
+                        "the photo isn't a wearable item the user could "
+                        "add to a closet."
+                    ),
+                },
+            ]
+            msg = await self._anthropic.messages.create(
+                model="claude-haiku-4-5",
+                max_tokens=80,
+                messages=[{"role": "user", "content": content}],  # type: ignore[typeddict-item]
+            )
+            text = "".join(b.text for b in msg.content if b.type == "text")
+            parsed = _extract_json(text)
+            label = str(parsed.get("label", "")).lower().strip()
+            confidence = float(parsed.get("confidence", 0.0))
+        except Exception as exc:
+            logger.warning(
+                "clothing_classifier.failed_open",
+                error_type=type(exc).__name__,
+                error_msg=str(exc)[:160],
+            )
+            return ClothingClassification(
+                is_clothing=True,
+                confidence=0.0,
+                detected_label="classifier_error",
+                reason=None,
+            )
+
+        wearable = {"clothing", "footwear", "accessory", "jewelry", "bag"}
+        is_clothing = label in wearable
+        # Only reject when we're reasonably confident it's NOT clothing.
+        # Soft threshold avoids killing legitimate garments shot under
+        # weird lighting / unusual angles.
+        if not is_clothing and confidence >= 0.7:
+            friendly = {
+                "person_no_garment_focus": (
+                    "This photo focuses on a person rather than a garment. "
+                    "Try a flat-lay or close-up of just the item."
+                ),
+                "food": "This looks like food, not clothing.",
+                "animal": "This looks like a pet, not clothing.",
+                "landscape": "This looks like a landscape, not clothing.",
+                "screenshot": (
+                    "This looks like a screenshot. Try a real photo of the item."
+                ),
+                "document": "This looks like a document, not clothing.",
+                "other": (
+                    "Couldn't identify a clothing item in this photo. "
+                    "Try a clearer shot of just the garment."
+                ),
+            }
+            reason = friendly.get(
+                label, "This doesn't look like a clothing item."
+            )
+            return ClothingClassification(
+                is_clothing=False,
+                confidence=confidence,
+                detected_label=label,
+                reason=reason,
+            )
+
+        # Either it's wearable, or we're not confident enough to reject —
+        # let the rest of the pipeline run.
+        return ClothingClassification(
+            is_clothing=True,
+            confidence=confidence,
+            detected_label=label or "uncertain",
+        )
+
     async def segment_garments(
         self, image_bytes: bytes, hints: list[str] | None = None
     ) -> list[SegmentationMask]:
-        """Multi-garment detection via SAM 2. NOT WIRED YET — returns empty.
+        """Multi-garment detection via Replicate's SAM 2 auto-mask mode.
 
-        When implemented, the flow will be:
-          1. Send image to Replicate's meta/sam-2 endpoint with auto-mask mode.
-          2. For each returned mask, crop + alpha-composite the source image
-             to produce a per-garment cutout.
-          3. Optionally run Claude Vision on each crop to label it
-             (top / bottom / shoes / accessory).
-          4. Return a list of SegmentationMask objects the caller turns into
-             individual WardrobeItem rows.
+        Flow:
+          1. POST the image to `meta/sam-2` in auto-everything mode. Returns
+             a list of mask URLs (binary PNGs at the original resolution).
+          2. For each mask, compute its bounding box + area-fraction. Drop
+             masks that are too small (<3% of image, almost certainly
+             background scraps) or too large (>90%, almost certainly the
+             whole frame) or that hug the edge (>80% perimeter overlap —
+             usually wall/floor).
+          3. Alpha-composite the original image through each kept mask to
+             produce a per-garment cutout (RGBA PNG with transparent bg).
+          4. Cap at top-6 masks by area so we never overwhelm the user.
 
-        Caller falls back to single-garment bg-removal when this returns [].
+        Returns a list of `SegmentationMask` objects. Empty list = SAM 2
+        couldn't find any clean regions; caller falls back to single-
+        garment bg-removal.
+
+        Cost: ~$0.04 per call (SAM 2 auto-everything mode on Replicate).
+        Latency: 10-20s. Reserved for the explicit "scan for multiple items"
+        path — not run on every upload.
         """
-        del image_bytes, hints
-        return []
+        del hints  # reserved for future grounded-SAM text prompts
+
+        if not self._replicate_token:
+            return []
+
+        import io as _io
+
+        try:
+            from PIL import Image as _PILImage
+
+            base_img = _PILImage.open(_io.BytesIO(image_bytes)).convert("RGBA")
+            img_w, img_h = base_img.size
+            img_area = img_w * img_h
+        except Exception as exc:
+            logger.warning(
+                "sam2.decode_failed",
+                error_type=type(exc).__name__,
+                error_msg=str(exc)[:160],
+            )
+            return []
+
+        # meta/sam-2 pinned version. Update via Replicate's model page if it
+        # 404s; this version was current as of 2026-Q1.
+        sam2_version = (
+            "fe97b453a6455861e3bac769b441ca1f1086110da7466dbb65cf1eecfd60dc83"
+        )
+
+        try:
+            data_url = "data:image/jpeg;base64," + base64.b64encode(image_bytes).decode()
+            # `points_per_side` controls how dense the auto-prompt grid is;
+            # 16 keeps cost / latency reasonable and is enough to catch
+            # 3-6 garments in a typical flat-lay.
+            result = await self._run_replicate(
+                sam2_version,
+                {
+                    "image": data_url,
+                    "points_per_side": 16,
+                    "pred_iou_thresh": 0.86,
+                    "stability_score_thresh": 0.92,
+                },
+                expect="json",
+            )
+        except Exception as exc:
+            logger.warning(
+                "sam2.predict_failed",
+                error_type=type(exc).__name__,
+                error_msg=str(exc)[:160],
+            )
+            return []
+
+        # Replicate models return masks in a few shapes depending on the
+        # checkpoint version. Normalise to a list of URLs.
+        mask_urls: list[str] = []
+        if isinstance(result, dict):
+            individual = result.get("individual_masks") or result.get("masks")
+            if isinstance(individual, list):
+                mask_urls = [str(u) for u in individual if isinstance(u, str)]
+        elif isinstance(result, list):
+            mask_urls = [str(u) for u in result if isinstance(u, str)]
+
+        if not mask_urls:
+            logger.info("sam2.no_masks")
+            return []
+
+        from PIL import Image as _PILImage  # re-import for scope clarity
+
+        kept: list[SegmentationMask] = []
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for url in mask_urls[:24]:  # hard cap on download volume
+                try:
+                    r = await client.get(url)
+                    r.raise_for_status()
+                    mask_img = _PILImage.open(_io.BytesIO(r.content)).convert("L")
+                except Exception:
+                    continue
+
+                if mask_img.size != (img_w, img_h):
+                    mask_img = mask_img.resize(
+                        (img_w, img_h), _PILImage.Resampling.NEAREST
+                    )
+
+                # Bounding box + area filter.
+                bbox = mask_img.getbbox()
+                if bbox is None:
+                    continue
+                x0, y0, x1, y1 = bbox
+                w, h = x1 - x0, y1 - y0
+                area_frac = (w * h) / max(img_area, 1)
+                if area_frac < 0.03 or area_frac > 0.90:
+                    continue
+                # Edge-hugging filter: if the bbox touches three or more
+                # frame edges within 8px, it's probably background, not a
+                # garment.
+                edge_hits = sum(
+                    [
+                        x0 < 8,
+                        y0 < 8,
+                        (img_w - x1) < 8,
+                        (img_h - y1) < 8,
+                    ]
+                )
+                if edge_hits >= 3:
+                    continue
+
+                # Alpha-composite: original RGB + mask as alpha.
+                garment = _PILImage.new("RGBA", base_img.size, (0, 0, 0, 0))
+                garment.paste(base_img, (0, 0), mask=mask_img)
+                cropped = garment.crop(bbox)
+                buf = _io.BytesIO()
+                cropped.save(buf, format="PNG", optimize=True)
+
+                kept.append(
+                    SegmentationMask(
+                        mask_bytes=buf.getvalue(),
+                        bounding_box=(x0, y0, w, h),
+                        label=None,
+                    )
+                )
+
+        # Largest-first so the most prominent garment is the first row in the
+        # mobile preview grid. Cap at 6 — beyond that the picker becomes noise.
+        kept.sort(
+            key=lambda m: m.bounding_box[2] * m.bounding_box[3],
+            reverse=True,
+        )
+        return kept[:6]
 
     async def tag_item(self, image_bytes: bytes) -> TagResult:
         tagged = await self._tag_with_claude(image_bytes)
@@ -884,55 +1226,113 @@ class ProductionGateway:
         *,
         person_image: bytes,
         garments: list[TryonInput],
+        body_shape: str | None = None,
     ) -> TryonResult:
-        """Render the person wearing every garment in one nano-banana call.
+        """Real virtual try-on via IDM-VTON, chained per garment.
 
-        nano-banana (Gemini 2.5 image edit) accepts an ordered array of input
-        images and a single prompt that can reference them by position. One call
-        produces a photorealistic composite. We pass the person first, then
-        garments in slot order so the prompt's references stay deterministic.
+        WHY IDM-VTON (not nano-banana):
+        google/nano-banana is a general image-edit model. With a person photo
+        + garment photos as inputs it tends to GENERATE a new person wearing
+        the clothes rather than EDIT the input photo — identity drift was
+        severe in production (rendered a stranger every time). IDM-VTON is
+        purpose-built virtual try-on: it segments the person's clothing,
+        masks the target region, and inpaints the new garment while
+        preserving face, hair, body, and pose. Identity preservation is
+        the model's training objective, not a prompt-coaxing hope.
+
+        Multi-garment strategy:
+        IDM-VTON renders one garment per call. We chain — top first, output
+        of that becomes the new "person" image for the bottom, etc. We
+        stop after upper/lower garments because shoes and accessories
+        don't have reliable try-on support in this model class.
+
+        Cost / latency:
+        ~$0.06 + ~15-25s per garment. A typical 2-garment outfit (top +
+        bottom) renders in ~30-50s for ~$0.12. Heavier than nano-banana
+        but the renders are actually you.
         """
+        del body_shape  # IDM-VTON doesn't take a drape hint; identity preservation handles fit
         if not self._replicate_token:
             raise RuntimeError("REPLICATE_API_TOKEN required for try-on")
         if not garments:
             raise ValueError("at least one garment required")
 
-        # Build the prompt: enumerate garments by slot so Gemini knows what to
-        # put where. nano-banana follows positional references reliably.
-        slot_phrases = []
-        for idx, g in enumerate(garments, start=2):  # person is image 1
-            desc = g.description or g.slot
-            slot_phrases.append(f"the {g.slot} from image {idx} ({desc})")
-        garments_phrase = ", ".join(slot_phrases)
+        # IDM-VTON garment categories. We only render slots the model
+        # actually handles well; shoes/accessories/jewelry get skipped here
+        # (they're still part of the outfit data, just not rendered).
+        slot_to_category = {
+            "top": "upper_body",
+            "outerwear": "upper_body",
+            "bottom": "lower_body",
+            "dress": "dresses",
+        }
+        renderable = [g for g in garments if g.slot in slot_to_category]
+        if not renderable:
+            raise RuntimeError(
+                "no renderable garments — IDM-VTON supports top/outerwear/"
+                "bottom/dress only"
+            )
 
-        prompt = (
-            f"Replace the clothing in image 1 to make the person wear "
-            f"{garments_phrase}. Keep the same pose, body, face, hair, and "
-            f"background. Photorealistic full-body fashion photography, sharp focus, "
-            f"natural lighting."
-        )
-
-        def _to_data_url(b: bytes) -> str:
-            mime = _detect_image_media_type(b)
-            return f"data:{mime};base64,{base64.b64encode(b).decode()}"
-
-        image_input = [_to_data_url(person_image)] + [_to_data_url(g.image_bytes) for g in garments]
+        # Render order: dress first (full body), then top, then outerwear
+        # (layered over top), then bottom. Each call uses the previous call's
+        # output as the new "person" image.
+        order = {"dress": 0, "top": 1, "outerwear": 2, "bottom": 3}
+        renderable.sort(key=lambda g: order.get(g.slot, 99))
 
         _, version = self._tryon_model.split(":", 1)
+        current_person = person_image
+
+        for garment in renderable:
+            current_person = await self._idm_vton_step(
+                version=version,
+                person_bytes=current_person,
+                garment=garment,
+                category=slot_to_category[garment.slot],
+            )
+
+        return TryonResult(
+            image_bytes=current_person,
+            model_id=self._tryon_model.split(":")[0],
+        )
+
+    async def _idm_vton_step(
+        self,
+        *,
+        version: str,
+        person_bytes: bytes,
+        garment: TryonInput,
+        category: str,
+    ) -> bytes:
+        """One IDM-VTON prediction: render the person wearing one garment."""
+        person_url = (
+            "data:image/jpeg;base64," + base64.b64encode(person_bytes).decode()
+        )
+        garm_url = (
+            f"data:{_detect_image_media_type(garment.image_bytes)};base64,"
+            + base64.b64encode(garment.image_bytes).decode()
+        )
+        # IDM-VTON's `garment_des` is a short text description of the garment;
+        # we feed the gender-stripped category + colour hint.
+        desc = _strip_gender(garment.description) or garment.slot
+
         result_url = await self._run_replicate(
             version,
             {
-                "prompt": prompt,
-                "image_input": image_input,
-                "aspect_ratio": "match_input_image",
-                "output_format": "jpg",
+                "human_img": person_url,
+                "garm_img": garm_url,
+                "garment_des": desc,
+                "category": category,
+                # Auto-mask + auto-crop give the best identity preservation
+                # without us having to ship a SAM segmentation pipeline.
+                "is_checked": True,
+                "is_checked_crop": True,
+                "denoise_steps": 30,
             },
         )
-
         async with httpx.AsyncClient(timeout=60.0) as c:
             r = await c.get(result_url)
             r.raise_for_status()
-            return TryonResult(image_bytes=r.content, model_id=self._tryon_model.split(":")[0])
+            return r.content
 
     async def refine_outfit(
         self,

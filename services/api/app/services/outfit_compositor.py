@@ -37,19 +37,84 @@ SHADOW_COLOR = (0, 0, 0, 70)
 SHADOW_OFFSET = (12, 14)
 SHADOW_BLUR = 22
 
-# Grid layout (col, row, cols-span, rows-span) for slot families.
-# Each cell is 540x540 (canvas / 2). Spanning multiple cells lets the hero item dominate.
-_GRID: dict[OutfitSlot, tuple[int, int, int, int]] = {
-    OutfitSlot.dress: (0, 0, 1, 2),       # full-height left column when present
-    OutfitSlot.top: (0, 0, 1, 1),
-    OutfitSlot.bottom: (1, 0, 1, 1),
-    OutfitSlot.outerwear: (0, 1, 1, 1),
-    OutfitSlot.shoes: (1, 1, 1, 1),
-    OutfitSlot.accessory: (1, 0, 1, 1),   # fallback only if no bottom
-    OutfitSlot.jewelry: (1, 1, 1, 1),     # fallback only if no shoes
-}
+# Slot placement strategy.
+#
+# The canvas is split into a 2-column grid. Different outfits have different
+# slot mixes — a dress outfit doesn't need a bottom cell, an outfit without
+# shoes shouldn't leave its cell empty, etc. The previous static GRID had
+# accessory + bottom colliding at (1,0) and jewelry + shoes colliding at
+# (1,1) when both were present. We now resolve cells dynamically based on
+# which slots are actually in the outfit.
+#
+# Priority order — when two slots want the same cell, the higher-priority
+# slot wins and the lower-priority one is dropped from the flat-lay (it's
+# still part of the outfit, just doesn't appear in the picture).
+_SLOT_PRIORITY: list[OutfitSlot] = [
+    OutfitSlot.dress,
+    OutfitSlot.top,
+    OutfitSlot.bottom,
+    OutfitSlot.outerwear,
+    OutfitSlot.shoes,
+    OutfitSlot.accessory,
+    OutfitSlot.jewelry,
+]
 CELL_SIZE = (CANVAS_SIZE[0] // 2, CANVAS_SIZE[1] // 2)
 INNER_PADDING = 40
+
+
+def _resolve_layout(
+    slots_present: set[OutfitSlot],
+) -> dict[OutfitSlot, tuple[int, int, int, int]]:
+    """Pick a non-overlapping cell for each slot present in the outfit.
+
+    Returns {slot: (col, row, cspan, rspan)} for every slot that survives
+    the collision resolution. Slots not in the map are skipped during
+    rendering (this is what fixes the overlap bug).
+    """
+    layout: dict[OutfitSlot, tuple[int, int, int, int]] = {}
+    occupied: set[tuple[int, int]] = set()
+
+    def _claim(slot: OutfitSlot, box: tuple[int, int, int, int]) -> bool:
+        col, row, cspan, rspan = box
+        cells = {
+            (c, r)
+            for c in range(col, col + cspan)
+            for r in range(row, row + rspan)
+        }
+        if cells & occupied:
+            return False
+        occupied.update(cells)
+        layout[slot] = box
+        return True
+
+    # Dress, if present, claims the full left column (two stacked cells)
+    # so the hero item dominates the composition.
+    if OutfitSlot.dress in slots_present:
+        _claim(OutfitSlot.dress, (0, 0, 1, 2))
+    else:
+        # No dress → top owns top-left, bottom owns top-right.
+        if OutfitSlot.top in slots_present:
+            _claim(OutfitSlot.top, (0, 0, 1, 1))
+        if OutfitSlot.bottom in slots_present:
+            _claim(OutfitSlot.bottom, (1, 0, 1, 1))
+
+    # Bottom row: outerwear bottom-left, shoes bottom-right.
+    if OutfitSlot.outerwear in slots_present:
+        _claim(OutfitSlot.outerwear, (0, 1, 1, 1))
+    if OutfitSlot.shoes in slots_present:
+        _claim(OutfitSlot.shoes, (1, 1, 1, 1))
+
+    # Accessories + jewelry fill any cells the primary slots didn't claim.
+    # Priority order: top-right > bottom-right > bottom-left > top-left.
+    fallback_cells = [(1, 0, 1, 1), (1, 1, 1, 1), (0, 1, 1, 1), (0, 0, 1, 1)]
+    for slot in (OutfitSlot.accessory, OutfitSlot.jewelry):
+        if slot not in slots_present:
+            continue
+        for box in fallback_cells:
+            if _claim(slot, box):
+                break
+
+    return layout
 
 
 def _place_cutout(
@@ -80,8 +145,9 @@ def _place_cutout(
     canvas.alpha_composite(resized.convert("RGBA"), (px, py))
 
 
-def _cell_box_for(slot: OutfitSlot) -> tuple[int, int, int, int]:
-    col, row, cspan, rspan = _GRID.get(slot, _GRID[OutfitSlot.accessory])
+def _grid_to_pixels(box: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+    """Convert a (col, row, cspan, rspan) grid box to pixel coords."""
+    col, row, cspan, rspan = box
     x0 = col * CELL_SIZE[0]
     y0 = row * CELL_SIZE[1]
     x1 = x0 + cspan * CELL_SIZE[0]
@@ -130,18 +196,29 @@ async def compose_outfit_image(ctx: dict[str, object], outfit_id: str) -> None:
 
         canvas = Image.new("RGBA", CANVAS_SIZE, BG_COLOR)
 
-        # If a dress is present, it claims the full left column; bottom is skipped.
+        # Resolve the layout dynamically based on which slots are actually
+        # present. This is the fix for the collision bug (accessory+bottom,
+        # jewelry+shoes both targeting the same cell when the outfit had
+        # all four). Slots that lose the collision are dropped from the
+        # flat-lay — they're still part of the outfit data, just not in
+        # the picture.
         slots_present = {row.slot for row in rows}
-        has_dress = OutfitSlot.dress in slots_present
+        layout = _resolve_layout(slots_present)
 
+        # De-dup: if the same slot has multiple items (shouldn't happen but
+        # belt-and-braces), keep the first one and skip the rest.
+        rendered_slots: set[OutfitSlot] = set()
         for slot, cutout_key, thumb_key in rows:
-            if has_dress and slot == OutfitSlot.bottom:
+            if slot not in layout:
+                continue
+            if slot in rendered_slots:
                 continue
             key = cutout_key or thumb_key
             cutout = await _load_item_cutout(key)
             if not cutout:
                 continue
-            _place_cutout(canvas, cutout, _cell_box_for(slot))
+            _place_cutout(canvas, cutout, _grid_to_pixels(layout[slot]))
+            rendered_slots.add(slot)
 
         # Brand strip along the bottom for share/export later.
         draw = ImageDraw.Draw(canvas)

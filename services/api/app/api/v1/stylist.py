@@ -141,6 +141,74 @@ async def get_outfit(
     return _outfit_to_response(outfit, items_map)
 
 
+@router.post("/outfits/{outfit_id}/recompose", response_model=OutfitOut)
+async def recompose_outfit(
+    outfit_id: uuid.UUID,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OutfitOut:
+    """Re-enqueue flat-lay composition.
+
+    Used when the original `compose_outfit_image` job died silently (worker
+    crash, Redis blip, transient Pillow error) and the mobile is stuck
+    showing the thumbnail-strip fallback. Clears `composite_image_key` so
+    the worker re-runs the layout, then returns the refreshed outfit row.
+    """
+    from sqlalchemy.orm import selectinload
+
+    outfit = (
+        await db.execute(
+            select(Outfit).where(Outfit.id == outfit_id).options(selectinload(Outfit.items))
+        )
+    ).scalar_one_or_none()
+    if not outfit:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    if outfit.owner_kind == OwnerKind.user and outfit.owner_id != user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN)
+    if outfit.owner_kind == OwnerKind.family_member:
+        member = (
+            await db.execute(
+                select(FamilyMember).where(
+                    FamilyMember.id == outfit.owner_id, FamilyMember.guardian_id == user.id
+                )
+            )
+        ).scalar_one_or_none()
+        if not member:
+            raise HTTPException(status.HTTP_403_FORBIDDEN)
+
+    # Reset so the worker doesn't short-circuit on the "already composed" guard
+    # in compose_outfit_image.
+    outfit.composite_image_key = None
+    await db.commit()
+
+    # Enqueue (inline fallback in dev/tests when Redis is down).
+    settings = get_settings()
+    from app.services.outfit_compositor import compose_outfit_image
+
+    if settings.ingest_inline:
+        await compose_outfit_image({}, str(outfit_id))
+    else:
+        try:
+            from arq import create_pool
+            from arq.connections import RedisSettings
+
+            redis = await create_pool(RedisSettings.from_dsn(settings.redis_url))
+            await redis.enqueue_job("compose_outfit_image", str(outfit_id))
+            await redis.aclose()
+        except Exception:
+            await compose_outfit_image({}, str(outfit_id))
+
+    await db.refresh(outfit)
+    item_ids = {oi.item_id for oi in outfit.items}
+    items_map: dict[uuid.UUID, object] = {}
+    if item_ids:
+        rows = (
+            await db.execute(select(WardrobeItem).where(WardrobeItem.id.in_(item_ids)))
+        ).scalars().all()
+        items_map = {r.id: r for r in rows}
+    return _outfit_to_response(outfit, items_map)
+
+
 @router.post("/outfits/{outfit_id}/events", status_code=status.HTTP_201_CREATED)
 async def record_event(
     outfit_id: uuid.UUID,

@@ -30,6 +30,9 @@ class OutfitTryon(Base):
         UUID(as_uuid=True), ForeignKey("outfits.id", ondelete="CASCADE"), index=True
     )
     base_photo_key: Mapped[str] = mapped_column(String(512))
+    # Which view this render represents — "front", "left_3q", "right_3q",
+    # "back". NULL for legacy single-angle renders predating multi-angle.
+    angle: Mapped[str | None] = mapped_column(String(20))
     rendered_image_key: Mapped[str | None] = mapped_column(String(512))
     status: Mapped[TryonStatus] = mapped_column(
         Enum(TryonStatus, name="tryon_status"), default=TryonStatus.pending

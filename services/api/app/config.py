@@ -84,12 +84,21 @@ class Settings(BaseSettings):
     #
     # Premium tier: configurable. Defaults to the standard model so a fresh
     # deployment doesn't break; swap to a higher-quality alternative
-    # (MODNet, Cascade-PSP, Sapiens) by setting REPLICATE_BG_REMOVAL_MODEL_PREMIUM
-    # once you've benchmarked it. Candidates to evaluate:
-    #   - pollinations/modnet:da7d45f3b836795f945f221fc0b01a6d (trimap-free
-    #     portrait matting, excellent on hair edges; ~$0.02/run)
-    #   - cjwbw/rembg:fb8af171cfa1616ddcf1242c093f9c46 (different rembg variant)
-    #   - 851-labs's premium SKU when it ships
+    # by setting REPLICATE_BG_REMOVAL_MODEL_PREMIUM once you've benchmarked it.
+    #
+    # How to pick a premium model:
+    #   uv run scripts/benchmark_bg_removal.py --limit 8
+    # Runs each candidate on real closet images, writes side-by-side outputs,
+    # prints a CSV + Markdown report. Open the model folders in Finder, pick
+    # the one with the cleanest hair / jewelry / fine-detail edges, paste
+    # its full slug:version below.
+    #
+    # Candidates the benchmark script ships with:
+    #   - 851-labs/background-remover (current standard, low cost, fast)
+    #   - cjwbw/rembg                  (different rembg variant)
+    #   - pollinations/modnet          (trimap-free portrait matting, best on
+    #                                   hair edges; ~$0.02/run)
+    #   - lucataco/rembg               (alternate rembg fork)
     #
     # Items are flagged via `wardrobe_items.quality_tier`. Default for new
     # uploads is "standard"; mobile can opt an item into "premium" either
@@ -107,9 +116,21 @@ class Settings(BaseSettings):
         "krthr/clip-embeddings:"
         "1c0371070cb827ec3c7f2f28adcdde54b50dcd239aa6faea0bc98b174ef03fb4"
     )
+    # Virtual try-on model.
+    #
+    # IDM-VTON is purpose-built for try-on — segments the person's clothing,
+    # masks the target region, and inpaints the new garment while
+    # preserving face, hair, body, and pose. Identity preservation is the
+    # training objective, not a prompt-coaxing hope.
+    #
+    # The previous default (google/nano-banana) is a GENERAL image-edit
+    # model. With person + garment photos it tended to GENERATE a new
+    # person wearing the clothes — identity drifted severely in
+    # production (a Black man in a bomber rendered every time, regardless
+    # of who uploaded the base photo). Don't go back to it.
     replicate_tryon_model: str = (
-        "google/nano-banana:"
-        "5bdc2c7cd642ae33611d8c33f79615f98ff02509ab8db9d8ec1cc6c36d378fba"
+        "cuuupid/idm-vton:"
+        "c871bb9b046607b680449ecbae55fd8c6d945e0a1948644bf2361b3d021d3ff4"
     )
 
     openweather_api_key: str = ""

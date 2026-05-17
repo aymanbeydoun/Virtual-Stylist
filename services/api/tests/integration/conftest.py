@@ -55,6 +55,10 @@ def _migrate() -> Iterator[None]:
     os.environ["DEV_AUTH_BYPASS"] = "true"
     os.environ["MODEL_GATEWAY_BACKEND"] = "stub"
     os.environ["INGEST_INLINE"] = "true"
+    # Kid sub-profile creation is gated off in production until the VPC payment
+    # flow lands (see docs/legal/VPC_DESIGN.md). Tests exercise the validation
+    # paths below it, so we enable the flag in the test process only.
+    os.environ["FEATURE_KID_SIGNUP_ENABLED"] = "true"
     from app.config import get_settings
 
     get_settings.cache_clear()

@@ -25,10 +25,15 @@ BodyShape = Literal[
     "athletic",
 ]
 
+# "mens" | "womens" — the two gendered category prefixes Claude tagging uses.
+# "unspecified" is represented as None on the wire (cleared field).
+Gender = Literal["mens", "womens"]
+
 
 class StylePreferenceOut(BaseModel):
     preferred_style: Style | None
     body_shape: BodyShape | None = None
+    gender: Gender | None = None
     owner_kind: OwnerKind
     owner_id: uuid.UUID
 
@@ -41,6 +46,12 @@ class StylePreferenceIn(BaseModel):
 
 class BodyShapeIn(BaseModel):
     body_shape: BodyShape | None
+    owner_kind: OwnerKind = OwnerKind.user
+    owner_id: uuid.UUID | None = None
+
+
+class GenderIn(BaseModel):
+    gender: Gender | None
     owner_kind: OwnerKind = OwnerKind.user
     owner_id: uuid.UUID | None = None
 
@@ -101,6 +112,7 @@ async def get_style_preference(
     return StylePreferenceOut(
         preferred_style=_coerce_style(profile.preferred_style),
         body_shape=_coerce_body_shape(profile.body_shape),
+        gender=_coerce_gender(profile.gender),
         owner_kind=resolved_kind,
         owner_id=resolved_id,
     )
@@ -122,6 +134,7 @@ async def set_style_preference(
     return StylePreferenceOut(
         preferred_style=_coerce_style(profile.preferred_style),
         body_shape=_coerce_body_shape(profile.body_shape),
+        gender=_coerce_gender(profile.gender),
         owner_kind=resolved_kind,
         owner_id=resolved_id,
     )
@@ -143,6 +156,7 @@ async def set_body_shape(
     return StylePreferenceOut(
         preferred_style=_coerce_style(profile.preferred_style),
         body_shape=_coerce_body_shape(profile.body_shape),
+        gender=_coerce_gender(profile.gender),
         owner_kind=resolved_kind,
         owner_id=resolved_id,
     )
@@ -178,6 +192,44 @@ def _coerce_body_shape(raw: str | None) -> BodyShape | None:
     if raw and raw in _VALID_BODY_SHAPES:
         return raw  # type: ignore[return-value]
     return None
+
+
+_VALID_GENDERS: set[str] = {"mens", "womens"}
+
+
+def _coerce_gender(raw: str | None) -> Gender | None:
+    if raw and raw in _VALID_GENDERS:
+        return raw  # type: ignore[return-value]
+    return None
+
+
+@router.put("/gender", response_model=StylePreferenceOut)
+async def set_gender(
+    body: GenderIn,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> StylePreferenceOut:
+    """Set the wearer's gender preference.
+
+    Drives the gender hard-filter on candidate selection — without it, a
+    user with a mixed seeded closet ends up with cross-gender items in
+    suggested outfits, which break try-on (Gemini biases the render to
+    match the item gender, not the user's photo).
+    """
+    resolved_kind, resolved_id = await _resolve_owner_for_prefs(
+        db, user.id, body.owner_kind, body.owner_id
+    )
+    profile = await _profile(db, resolved_kind, resolved_id)
+    profile.gender = body.gender
+    await db.commit()
+    await db.refresh(profile)
+    return StylePreferenceOut(
+        preferred_style=_coerce_style(profile.preferred_style),
+        body_shape=_coerce_body_shape(profile.body_shape),
+        gender=_coerce_gender(profile.gender),
+        owner_kind=resolved_kind,
+        owner_id=resolved_id,
+    )
 
 
 # Literal is imported for typing-only use elsewhere; reference once to silence

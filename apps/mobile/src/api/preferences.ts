@@ -9,9 +9,12 @@ export type BodyShape =
   | "inverted_triangle"
   | "athletic";
 
+export type Gender = "mens" | "womens";
+
 export interface StylePreference {
   preferred_style: Style | null;
   body_shape: BodyShape | null;
+  gender: Gender | null;
   owner_kind: OwnerKind;
   owner_id: string;
 }
@@ -39,6 +42,17 @@ export const preferencesApi = {
       method: "PUT",
       json: {
         body_shape: shape,
+        owner_kind: owner.kind,
+        owner_id: owner.id,
+      },
+    });
+  },
+
+  async setGender(owner: { kind: OwnerKind; id?: string }, gender: Gender | null) {
+    return api<StylePreference>("/preferences/gender", {
+      method: "PUT",
+      json: {
+        gender,
         owner_kind: owner.kind,
         owner_id: owner.id,
       },

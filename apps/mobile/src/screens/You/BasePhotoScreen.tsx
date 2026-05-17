@@ -15,6 +15,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import type { Angle } from "@/api/types";
+import { ANGLES, ANGLE_HINT, ANGLE_LABEL } from "@/api/types";
 import { tryonApi } from "@/api/tryon";
 import { wardrobeApi } from "@/api/wardrobe";
 import { useActiveProfile } from "@/state/profile";
@@ -24,40 +26,69 @@ import { ensureJpeg } from "@/utils/image";
 
 const baseUrl = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 
+/**
+ * Multi-angle base photo capture.
+ *
+ * For "VERY REAL" multi-angle try-on, we need a real photo at each angle.
+ * The screen renders 4 slots — front, 3/4 left, back, 3/4 right — each can
+ * be filled independently. Front is required (try-on falls back to it if
+ * the other angles aren't uploaded yet); the others unlock the carousel
+ * playback once present.
+ */
 export function BasePhotoScreen() {
   const nav = useNavigation();
   const qc = useQueryClient();
   const profile = useActiveProfile();
   const owner = { kind: profile.ownerKind, id: profile.ownerId ?? undefined };
   const [status, setStatus] = useState<string | null>(null);
+  const [busyAngle, setBusyAngle] = useState<Angle | null>(null);
 
-  const queryKey = ["basePhoto", profile.ownerKind, profile.ownerId];
-  const current = useQuery({
+  const queryKey = ["basePhotoSet", profile.ownerKind, profile.ownerId];
+  const photos = useQuery({
     queryKey,
-    queryFn: () => tryonApi.getBasePhoto(owner),
+    queryFn: () => tryonApi.getBasePhotoSet(owner),
   });
 
   const upload = useMutation({
-    mutationFn: async (uri: string) => {
+    mutationFn: async ({ uri, angle }: { uri: string; angle: Angle }) => {
       setStatus("Preparing photo…");
       const jpegUri = await ensureJpeg(uri);
-      const signed = await tryonApi.createBasePhotoUploadUrl("image/jpeg", owner);
-
-      setStatus("Uploading photo…");
+      const signed = await tryonApi.createBasePhotoUploadUrl(
+        "image/jpeg",
+        owner,
+      );
+      setStatus("Uploading…");
       await wardrobeApi.uploadFileUri(signed.upload_url, jpegUri, "image/jpeg");
-
       setStatus("Saving…");
-      return tryonApi.commitBasePhoto(signed.object_key, owner);
+      return tryonApi.commitBasePhoto(signed.object_key, owner, angle);
+    },
+    onMutate: ({ angle }) => {
+      setBusyAngle(angle);
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey });
-      setStatus("Saved");
-      setTimeout(() => nav.goBack(), 800);
+      setStatus(null);
+      setBusyAngle(null);
     },
-    onError: (err) => setStatus(`Failed: ${(err as Error).message}`),
+    onError: (err) => {
+      setStatus(`Failed: ${(err as Error).message}`);
+      setBusyAngle(null);
+    },
   });
 
-  const pick = (source: "camera" | "library") => {
+  const pickForAngle = (angle: Angle) => {
+    Alert.alert(
+      `Photo for ${ANGLE_LABEL[angle]}`,
+      ANGLE_HINT[angle],
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Photo library", onPress: () => pick(angle, "library") },
+        { text: "Camera", onPress: () => pick(angle, "camera") },
+      ],
+    );
+  };
+
+  const pick = (angle: Angle, source: "camera" | "library") => {
     if (source === "camera" && isIosSimulator()) {
       Alert.alert(
         "Camera not available in Simulator",
@@ -90,7 +121,7 @@ export function BasePhotoScreen() {
               });
         if (result.canceled) return;
         const asset = result.assets[0];
-        if (asset) upload.mutate(asset.uri);
+        if (asset) upload.mutate({ uri: asset.uri, angle });
       } catch (e) {
         const m = e instanceof Error ? e.message : String(e);
         Alert.alert(`Couldn't open ${source}`, m);
@@ -98,64 +129,90 @@ export function BasePhotoScreen() {
     })();
   };
 
-  const existingKey = current.data?.base_photo_key;
+  const keys = photos.data?.base_photo_keys ?? {};
+  const completed = ANGLES.filter((a) => keys[a]).length;
 
   return (
     <SafeAreaView style={styles.root}>
-      <ScrollView contentContainerStyle={{ padding: spacing(5) }}>
+      <ScrollView contentContainerStyle={{ padding: spacing(5), paddingBottom: spacing(10) }}>
         <Text style={styles.eyebrow}>Virtual try-on</Text>
-        <Text style={styles.title}>Your base photo</Text>
+        <Text style={styles.title}>Your photo, four angles</Text>
         <Text style={styles.subtitle}>
-          One full-body photo, plain background, front-facing. The AI uses this to render you
-          wearing every outfit. You can replace it any time.
+          The AI uses these to render you wearing every outfit from every angle.
+          One required (front); add 3/4 left, back, and 3/4 right to unlock the
+          full 360° carousel.
         </Text>
 
-        {existingKey ? (
-          <View style={styles.currentBox}>
-            <Image
-              source={{
-                uri: `${baseUrl}/api/v1/wardrobe/_local_read/${existingKey}?v=${profile.ownerId ?? "user"}`,
-              }}
-              style={styles.preview}
-              contentFit="cover"
+        <View style={styles.progress}>
+          <Text style={styles.progressText}>
+            {completed} of {ANGLES.length} angles captured
+          </Text>
+          <View style={styles.progressBar}>
+            <View
+              style={[
+                styles.progressFill,
+                { width: `${(completed / ANGLES.length) * 100}%` },
+              ]}
             />
-            <Text style={styles.currentLabel}>Current base photo</Text>
           </View>
-        ) : (
-          <View style={styles.tips}>
-            <Text style={styles.tipTitle}>For best results</Text>
-            <Text style={styles.tip}>• Stand against a plain wall</Text>
-            <Text style={styles.tip}>• Wear fitted clothing (so the AI sees your shape)</Text>
-            <Text style={styles.tip}>• Arms slightly away from body</Text>
-            <Text style={styles.tip}>• Camera at chest height, full body in frame</Text>
-          </View>
-        )}
+        </View>
 
-        <Pressable
-          style={styles.primary}
-          onPress={() => pick("camera")}
-          disabled={upload.isPending}
-        >
-          <Ionicons name="camera-outline" size={18} color={palette.onAccent} />
-          <Text style={styles.primaryText}>Take a photo</Text>
-        </Pressable>
-        <Pressable
-          style={styles.secondary}
-          onPress={() => pick("library")}
-          disabled={upload.isPending}
-        >
-          <Ionicons name="images-outline" size={18} color={palette.text} />
-          <Text style={styles.secondaryText}>Choose from library</Text>
-        </Pressable>
+        <View style={styles.tips}>
+          <Text style={styles.tipTitle}>For best results</Text>
+          <Text style={styles.tip}>• Stand against a plain wall, even lighting</Text>
+          <Text style={styles.tip}>• Wear fitted clothing so the AI sees your shape</Text>
+          <Text style={styles.tip}>• Arms slightly away from your body</Text>
+          <Text style={styles.tip}>• Full body in frame, camera at chest height</Text>
+        </View>
 
-        {upload.isPending && (
-          <View style={styles.statusBox}>
-            <ActivityIndicator color={palette.accent} />
-            <Text style={styles.statusText}>{status}</Text>
-          </View>
-        )}
-        {!upload.isPending && status && (
-          <Text style={styles.statusText}>{status}</Text>
+        <View style={styles.grid}>
+          {ANGLES.map((angle) => {
+            const key = keys[angle];
+            const isBusy = busyAngle === angle;
+            return (
+              <Pressable
+                key={angle}
+                style={[styles.cell, !!key && styles.cellFilled]}
+                onPress={() => pickForAngle(angle)}
+                disabled={isBusy}
+              >
+                {key ? (
+                  <Image
+                    source={{
+                      uri: `${baseUrl}/api/v1/wardrobe/_local_read/${key}?v=${angle}`,
+                    }}
+                    style={styles.thumb}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <View style={styles.empty}>
+                    <Ionicons
+                      name="add-circle-outline"
+                      size={32}
+                      color={palette.textMuted}
+                    />
+                  </View>
+                )}
+                <View style={styles.label}>
+                  <Text style={styles.labelTitle}>{ANGLE_LABEL[angle]}</Text>
+                  {isBusy && (
+                    <ActivityIndicator color={palette.accent} size="small" />
+                  )}
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {status && <Text style={styles.statusText}>{status}</Text>}
+
+        {completed > 0 && (
+          <Pressable
+            style={styles.doneButton}
+            onPress={() => nav.goBack()}
+          >
+            <Text style={styles.doneText}>Done</Text>
+          </Pressable>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -171,18 +228,26 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   title: { color: palette.text, fontSize: 28, fontWeight: "700", marginTop: 4 },
-  subtitle: { color: palette.textMuted, marginTop: spacing(3), lineHeight: 20 },
-  currentBox: {
-    marginTop: spacing(5),
-    backgroundColor: palette.surface,
-    borderRadius: radii.md,
-    padding: spacing(3),
-    alignItems: "center",
+  subtitle: {
+    color: palette.textMuted,
+    marginTop: spacing(3),
+    lineHeight: 20,
   },
-  preview: { width: "100%", aspectRatio: 3 / 4, borderRadius: radii.md },
-  currentLabel: { color: palette.textMuted, marginTop: spacing(2), fontSize: 12 },
+  progress: { marginTop: spacing(5), marginBottom: spacing(2) },
+  progressText: {
+    color: palette.textMuted,
+    fontSize: 12,
+    marginBottom: spacing(2),
+  },
+  progressBar: {
+    height: 4,
+    backgroundColor: palette.surfaceAlt,
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  progressFill: { height: "100%", backgroundColor: palette.accent },
   tips: {
-    marginTop: spacing(5),
+    marginTop: spacing(4),
     backgroundColor: palette.surface,
     padding: spacing(4),
     borderRadius: radii.md,
@@ -190,33 +255,47 @@ const styles = StyleSheet.create({
   },
   tipTitle: { color: palette.text, fontWeight: "600", marginBottom: spacing(2) },
   tip: { color: palette.textMuted, fontSize: 13 },
-  primary: {
+  grid: {
+    marginTop: spacing(5),
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing(3),
+  },
+  cell: {
+    width: "47%",
+    backgroundColor: palette.surface,
+    borderRadius: radii.md,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: palette.surfaceAlt,
+  },
+  cellFilled: { borderColor: palette.accent },
+  thumb: { width: "100%", aspectRatio: 3 / 4 },
+  empty: {
+    width: "100%",
+    aspectRatio: 3 / 4,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: palette.background,
+  },
+  label: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: spacing(3),
+  },
+  labelTitle: { color: palette.text, fontWeight: "600", fontSize: 14 },
+  statusText: {
+    color: palette.textMuted,
+    marginTop: spacing(4),
+    textAlign: "center",
+  },
+  doneButton: {
     backgroundColor: palette.accent,
     padding: spacing(4),
     borderRadius: radii.md,
     marginTop: spacing(6),
     alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: spacing(2),
   },
-  primaryText: { color: palette.onAccent, fontWeight: "700", fontSize: 16 },
-  secondary: {
-    backgroundColor: palette.surface,
-    padding: spacing(4),
-    borderRadius: radii.md,
-    marginTop: spacing(3),
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: spacing(2),
-  },
-  secondaryText: { color: palette.text, fontWeight: "600", fontSize: 16 },
-  statusBox: {
-    marginTop: spacing(6),
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing(3),
-  },
-  statusText: { color: palette.textMuted, marginTop: spacing(4) },
+  doneText: { color: palette.onAccent, fontWeight: "700", fontSize: 16 },
 });

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import DateTime, Enum, SmallInteger, String, Text
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.json_types import PydanticJSON
@@ -39,6 +39,12 @@ class User(Base):
     locale: Mapped[str] = mapped_column(String(10), default="en-US")
     birth_year: Mapped[int | None] = mapped_column(SmallInteger)
     base_photo_key: Mapped[str | None] = mapped_column(String(512))
+    # Per-angle base photos for multi-angle try-on. Map of
+    #   {"front": "raw/.../front.jpg", "left_3q": ..., "right_3q": ..., "back": ...}
+    # Mirrors `base_photo_key` as the "front" entry for back-compat.
+    base_photo_keys: Mapped[dict[str, str]] = mapped_column(
+        JSONB(none_as_null=True), default=dict, server_default="{}"
+    )
 
     created_at: Mapped[datetime] = created_at_col()
     updated_at: Mapped[datetime] = updated_at_col()
@@ -83,6 +89,11 @@ class StyleProfile(Base):
     # Body-shape preference — drives the stylist's silhouette recommendations.
     # Free-text rather than enum so we can evolve the taxonomy without migrations.
     body_shape: Mapped[str | None] = mapped_column(String(30))
+    # Gender preference — hard-filters candidate items so the try-on doesn't
+    # render the user wearing cross-gender garments. Values: "mens" |
+    # "womens" | None (no filter → falls back to auto-detection from the
+    # closet's dominant gender at >=70%).
+    gender: Mapped[str | None] = mapped_column(String(20))
 
     created_at: Mapped[datetime] = created_at_col()
     updated_at: Mapped[datetime] = updated_at_col()

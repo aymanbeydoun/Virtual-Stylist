@@ -30,4 +30,10 @@ export const refineApi = {
       json: { message },
     });
   },
+
+  async recompose(outfitId: string) {
+    return api<Outfit>(`/stylist/outfits/${outfitId}/recompose`, {
+      method: "POST",
+    });
+  },
 };

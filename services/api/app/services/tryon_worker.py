@@ -21,6 +21,7 @@ from app.core.storage import get_storage
 from app.db import SessionLocal
 from app.models.outfits import Outfit, OutfitSlot
 from app.models.tryons import OutfitTryon, TryonStatus
+from app.models.users import OwnerKind, StyleProfile
 from app.services.model_gateway import TryonInput, get_model_gateway
 
 logger = structlog.get_logger()
@@ -36,6 +37,25 @@ _TRYON_SLOTS = (
     OutfitSlot.bottom,
     OutfitSlot.outerwear,
 )
+
+
+async def _lookup_body_shape(
+    db: Any, owner_kind: OwnerKind, owner_id: uuid.UUID
+) -> str | None:
+    """Fetch the wearer's body_shape from their style profile.
+
+    Family members + the user himself both have StyleProfile rows keyed by
+    owner_kind + owner_id. Returns None if no profile or no shape set.
+    """
+    row = (
+        await db.execute(
+            select(StyleProfile).where(
+                StyleProfile.owner_kind == owner_kind,
+                StyleProfile.owner_id == owner_id,
+            )
+        )
+    ).scalar_one_or_none()
+    return row.body_shape if row else None
 
 
 async def tryon_outfit(ctx: dict[str, Any], tryon_id: str) -> None:
@@ -68,16 +88,19 @@ async def tryon_outfit(ctx: dict[str, Any], tryon_id: str) -> None:
             await db.commit()
             return
 
-        # Load each outfit item that contributes to the body composite. Pull
-        # the cutout image when available (cleaner edits) else the raw photo.
+        # FULL OUTFIT mode — render every renderable garment chained through
+        # IDM-VTON. Slower than rendering one piece (~75-100s for a typical
+        # 2-3 garment outfit) but the user sees themselves in the COMPLETE
+        # look, not just a hero piece. Quality > speed per product call.
         from app.models.wardrobe import WardrobeItem
 
-        garment_inputs: list[TryonInput] = []
         item_ids = [oi.item_id for oi in outfit.items if oi.slot in _TRYON_SLOTS]
         items_q = await db.execute(
             select(WardrobeItem).where(WardrobeItem.id.in_(item_ids))
         )
         items_by_id = {it.id: it for it in items_q.scalars().all()}
+
+        garment_inputs: list[TryonInput] = []
         for oi in outfit.items:
             if oi.slot not in _TRYON_SLOTS:
                 continue
@@ -106,9 +129,17 @@ async def tryon_outfit(ctx: dict[str, Any], tryon_id: str) -> None:
             await db.commit()
             return
 
+        # Pull the wearer's body_shape so nano-banana can drape accordingly.
+        # We look up the style profile for whoever owns the outfit (user OR
+        # family member). Missing profile → None → gateway falls back to a
+        # shape-agnostic prompt.
+        body_shape = await _lookup_body_shape(db, outfit.owner_kind, outfit.owner_id)
+
         try:
             result = await gateway.try_on_outfit(
-                person_image=person_bytes, garments=garment_inputs
+                person_image=person_bytes,
+                garments=garment_inputs,
+                body_shape=body_shape,
             )
         except Exception as exc:
             logger.warning(

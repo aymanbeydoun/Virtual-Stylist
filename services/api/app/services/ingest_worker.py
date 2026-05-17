@@ -61,6 +61,62 @@ def _is_transient(exc: Exception) -> bool:
     return False
 
 
+# Fabrics/transparency values where the standard bg-remover routinely loses
+# detail. Re-checked against Claude's tagging taxonomy in `_TAGGING_SYSTEM`.
+_DELICATE_FABRICS = {"silk", "linen", "lace", "fur", "mesh", "cashmere"}
+_DELICATE_TRANSPARENCY = {"semi_sheer", "sheer"}
+# When Claude isn't sure what the item even is, the cutout is also likely
+# imperfect — kick to premium so the user at least gets a clean edge.
+_LOW_CONFIDENCE = 0.7
+
+
+def _should_upgrade_to_premium(tags: object) -> bool:
+    """Decide whether this item warrants the premium bg-removal tier.
+
+    Pure function over the tagging result so it's easy to test and to tune.
+    Triggers when ANY of:
+      - fabric is one of silk/linen/lace/fur/mesh/cashmere (hair-like edges)
+      - transparency is semi_sheer or sheer (alpha matting helps a lot)
+      - category-or-pattern confidence is below 0.7 (cutout likely messy too)
+      - embellishments include lace or fringe (fine, detached detail)
+    """
+    attrs = getattr(tags, "attributes", None) or {}
+    fabric = str(attrs.get("fabric", "")).lower()
+    transparency = str(attrs.get("transparency", "")).lower()
+    embellishments_raw = attrs.get("embellishments") or []
+    embellishments = (
+        {str(e).lower() for e in embellishments_raw}
+        if isinstance(embellishments_raw, list)
+        else set()
+    )
+    confidence = getattr(tags, "confidence_scores", None)
+    min_conf = getattr(confidence, "min_confidence", 1.0) if confidence else 1.0
+
+    return (
+        fabric in _DELICATE_FABRICS
+        or transparency in _DELICATE_TRANSPARENCY
+        or min_conf < _LOW_CONFIDENCE
+        or bool(embellishments & {"lace", "fringe"})
+    )
+
+
+def _premium_reason(tags: object) -> str:
+    """Short human-readable reason for the structured log."""
+    attrs = getattr(tags, "attributes", None) or {}
+    fabric = str(attrs.get("fabric", "")).lower()
+    transparency = str(attrs.get("transparency", "")).lower()
+    if fabric in _DELICATE_FABRICS:
+        return f"delicate_fabric:{fabric}"
+    if transparency in _DELICATE_TRANSPARENCY:
+        return f"transparency:{transparency}"
+    embellishments_raw = attrs.get("embellishments") or []
+    if isinstance(embellishments_raw, list):
+        for e in embellishments_raw:
+            if str(e).lower() in {"lace", "fringe"}:
+                return f"embellishment:{str(e).lower()}"
+    return "low_confidence"
+
+
 async def ingest_item(ctx: dict[str, Any], item_id: str) -> None:
     """Run the full CV pipeline for one wardrobe item.
 
@@ -119,6 +175,39 @@ async def ingest_item(ctx: dict[str, Any], item_id: str) -> None:
             logger.info("item.preflight_rejected", item_id=str(item.id), reason=pf.reason)
             return
 
+        # Zero-shot clothing-vs-not gate. Catches cat photos / landscapes /
+        # screenshots BEFORE we burn the bg-removal + tagging credits. ~$0.0003
+        # Haiku call, sub-second. Fails open on classifier error.
+        try:
+            clf = await gateway.classify_clothing(raw)
+        except Exception as exc:
+            if _is_transient(exc):
+                logger.info(
+                    "item.classifier_retry",
+                    item_id=str(item.id),
+                    error_type=type(exc).__name__,
+                )
+                raise
+            logger.warning(
+                "item.classifier_failed_open",
+                item_id=str(item.id),
+                error_type=type(exc).__name__,
+            )
+            clf = None
+        if clf is not None and not clf.is_clothing:
+            item.status = "failed"
+            item.failure_reason = clf.reason or (
+                "This doesn't look like a clothing item."
+            )
+            await db.commit()
+            logger.info(
+                "item.classifier_rejected",
+                item_id=str(item.id),
+                detected_label=clf.detected_label,
+                confidence=clf.confidence,
+            )
+            return
+
         try:
             cutout = await gateway.remove_background(
                 raw, quality_tier=item.quality_tier or "standard"
@@ -159,6 +248,41 @@ async def ingest_item(ctx: dict[str, Any], item_id: str) -> None:
                 item.failure_reason = "Couldn't tag this photo. Tap to retry or delete."
             await db.commit()
             return
+
+        # ----- Auto premium-tier upgrade -----------------------------------
+        # The standard bg-remover (851-labs) is fast + cheap but struggles on
+        # hair, lace, mesh, fringe, and sheer/translucent fabrics. Once Claude
+        # has tagged the item, we know whether it falls into one of those
+        # buckets — if so, re-run the cutout with the premium model and
+        # replace the saved cutout. Costs ~$0.02 extra, only on the ~15% of
+        # items that actually benefit.
+        needs_premium = (
+            (item.quality_tier or "standard") == "standard"
+            and _should_upgrade_to_premium(tags)
+        )
+        if needs_premium:
+            try:
+                logger.info(
+                    "item.premium_upgrade",
+                    item_id=str(item.id),
+                    reason=_premium_reason(tags),
+                )
+                premium_cutout = await gateway.remove_background(
+                    raw, quality_tier="premium"
+                )
+                # Only overwrite if the premium model actually produced
+                # something different from the raw (gateway returns the
+                # raw on failure).
+                if premium_cutout != raw:
+                    await storage.write_bytes(cutout_key, premium_cutout)
+                    item.quality_tier = "premium"
+            except Exception as exc:
+                # Non-fatal — keep the standard cutout we already saved.
+                logger.warning(
+                    "item.premium_upgrade_failed",
+                    item_id=str(item.id),
+                    error_type=type(exc).__name__,
+                )
 
         item.cutout_image_key = cutout_key
         item.thumbnail_key = cutout_key

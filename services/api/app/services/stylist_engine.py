@@ -50,6 +50,91 @@ async def _resolved_body_shape(
     ).scalar_one_or_none()
     return profile.body_shape if profile else None
 
+
+async def _taste_signal(
+    db: AsyncSession, owner_kind: OwnerKind, owner_id: uuid.UUID
+) -> str | None:
+    """Build a compact 'taste so far' note from the last 60 days of events.
+
+    Reads outfit_events (worn / saved / skipped) → joins to outfit_items
+    → wardrobe_items, then summarises by category and outfit style:
+      worn: 3 womens.tops.blouse, 2 womens.bottoms.jeans (style: classic)
+      skipped: 1 streetwear
+
+    Feeds back into the stylist prompt so future recommendations weight
+    toward what the user actually liked and away from what they rejected.
+    Returns None when the user has no event history yet.
+    """
+    cutoff = datetime.now(UTC) - timedelta(days=60)
+
+    rows = (
+        await db.execute(
+            select(
+                OutfitEvent.event_kind,
+                Outfit.style,
+                WardrobeItem.category,
+            )
+            .join(Outfit, Outfit.id == OutfitEvent.outfit_id)
+            .join(OutfitItem, OutfitItem.outfit_id == Outfit.id)
+            .join(WardrobeItem, WardrobeItem.id == OutfitItem.item_id)
+            .where(
+                Outfit.owner_kind == owner_kind,
+                Outfit.owner_id == owner_id,
+                OutfitEvent.occurred_at >= cutoff,
+            )
+        )
+    ).all()
+
+    if not rows:
+        return None
+
+    # Bucket by event kind. We only care about (worn|saved) → positive signal,
+    # and (skipped) → negative. Saved is treated as a softer positive.
+    from collections import Counter
+
+    worn_cats: Counter[str] = Counter()
+    worn_styles: Counter[str] = Counter()
+    skipped_cats: Counter[str] = Counter()
+    skipped_styles: Counter[str] = Counter()
+
+    for ev_kind, style, category in rows:
+        if not category:
+            continue
+        if ev_kind in (OutfitEventKind.worn, OutfitEventKind.saved):
+            worn_cats[category] += 1
+            if style:
+                worn_styles[style] += 1
+        elif ev_kind == OutfitEventKind.skipped:
+            skipped_cats[category] += 1
+            if style:
+                skipped_styles[style] += 1
+
+    parts: list[str] = []
+    if worn_cats:
+        top_worn = ", ".join(f"{n}x {c}" for c, n in worn_cats.most_common(5))
+        style_hint = (
+            f" (preferred style: {worn_styles.most_common(1)[0][0]})"
+            if worn_styles
+            else ""
+        )
+        parts.append(f"Recently worn/saved: {top_worn}{style_hint}.")
+    if skipped_cats:
+        top_skip = ", ".join(f"{n}x {c}" for c, n in skipped_cats.most_common(3))
+        style_hint = (
+            f" (rejected style: {skipped_styles.most_common(1)[0][0]})"
+            if skipped_styles
+            else ""
+        )
+        parts.append(f"Recently skipped: {top_skip}{style_hint}.")
+    if not parts:
+        return None
+    parts.append(
+        "Weight new recommendations toward the worn/saved patterns and "
+        "away from the skipped ones. If you must include a skipped "
+        "category, justify it in the rationale."
+    )
+    return " ".join(parts)
+
 _CATEGORY_TO_SLOT = {
     "tops": OutfitSlot.top,
     "bottoms": OutfitSlot.bottom,
@@ -98,21 +183,25 @@ _BODY_SHAPE_GUIDANCE: dict[str, str] = {
 
 
 _DESTINATION_FORMALITY = {
-    "office": (5, 9),
+    # Office floors are 3, not 5 — modern smart-casual offices accept
+    # white sneakers + chinos + polo. The OLD 5-floor filtered out every
+    # mens shoe in the test closet (only sneakers seeded), returning 0
+    # outfits for "office".
+    "office": (3, 9),
     "formal_event": (8, 10),
-    "wedding": (7, 10),  # guest attire — never under-dress
-    "restaurant": (4, 8),  # nicer dining — UAE skews dressier
-    "date": (4, 8),
-    "religious": (5, 9),  # modest + formal-leaning by default
-    "brunch": (3, 7),
-    "mall": (2, 7),
+    "wedding": (6, 10),  # guest attire — never under-dress
+    "restaurant": (3, 8),  # nicer dining — UAE skews dressier
+    "date": (3, 8),
+    "religious": (4, 9),  # modest + formal-leaning by default
+    "brunch": (2, 7),
+    "mall": (1, 7),
     "casual": (1, 6),
     "school": (1, 5),
     "park": (1, 4),
     "playground": (0, 4),
     "beach": (0, 3),
     "gym": (0, 3),
-    "travel": (2, 6),
+    "travel": (1, 6),
 }
 
 
@@ -134,6 +223,43 @@ def _weather_ok(item: WardrobeItem, weather: WeatherSnapshot | None) -> bool:
     if weather.temp_c <= 5 and "summer" in (item.seasonality or []):
         return False
     return True
+
+
+# Gender prefixes we recognise in the category taxonomy. "accessories" +
+# "jewelry" are gender-fluid and pass the filter regardless.
+_GENDER_PREFIXES = {"mens", "womens", "kids"}
+
+
+def _item_gender(category: str | None) -> str | None:
+    """Return 'mens'/'womens'/'kids' if the category names one, else None."""
+    if not category:
+        return None
+    prefix = category.split(".", 1)[0]
+    return prefix if prefix in _GENDER_PREFIXES else None
+
+
+def _matches_gender(category: str | None, target: str) -> bool:
+    """True when an item belongs to `target` gender or is gender-fluid."""
+    g = _item_gender(category)
+    return g is None or g == target
+
+
+def _dominant_gender(items: list[WardrobeItem]) -> str | None:
+    """Pick the dominant gender from a closet, or None if no clear majority.
+
+    Looks only at items that carry a gender prefix; ignores accessories and
+    jewelry. Returns the prefix if it claims >=70% of gendered items;
+    otherwise returns None so we don't hard-filter a genuinely mixed closet.
+    """
+    gendered = [_item_gender(i.category) for i in items]
+    gendered = [g for g in gendered if g]
+    if not gendered:
+        return None
+    from collections import Counter
+
+    counts = Counter(gendered)
+    top, n = counts.most_common(1)[0]
+    return top if n / len(gendered) >= 0.7 else None
 
 
 async def _select_candidates(
@@ -174,6 +300,26 @@ async def _select_candidates(
     )
     items = list((await db.execute(q)).scalars().all())
 
+    # Gender hard-filter. The closet may contain mixed-gender items from
+    # seeding or shared accounts; suggesting a women's blouse to a man
+    # broke try-on (the renderer biased to a generic woman).
+    #
+    # Resolution order:
+    #   1. Explicit `style_profile.gender` — wins always.
+    #   2. Auto-detect from closet majority (>=70%) — for users who never
+    #      set the preference but whose closet is unambiguous.
+    #   3. Otherwise no filter (mixed closet, ambiguous).
+    profile = (
+        await db.execute(
+            select(StyleProfile).where(
+                StyleProfile.owner_kind == owner_kind,
+                StyleProfile.owner_id == owner_id,
+            )
+        )
+    ).scalar_one_or_none()
+    explicit_gender = profile.gender if profile else None
+    dominant_gender = explicit_gender or _dominant_gender(items)
+
     buckets: dict[OutfitSlot, list[WardrobeItem]] = {}
     for item in items:
         if item.id in recent_ids:
@@ -183,6 +329,8 @@ async def _select_candidates(
         ):
             continue
         if not _weather_ok(item, weather):
+            continue
+        if dominant_gender and not _matches_gender(item.category, dominant_gender):
             continue
         slot = _slot_for(item.category)
         if slot is None:
@@ -303,18 +451,25 @@ async def generate_outfits(
     # by default without re-picking every time.
     resolved_style = style or await _resolved_default_style(db, owner_kind, owner_id)
     body_shape = await _resolved_body_shape(db, owner_kind, owner_id)
+    taste_note = await _taste_signal(db, owner_kind, owner_id)
 
     candidates = [_serialize_candidate(i) for i in items]
     item_by_id = {str(i.id): i for i in items}
 
-    # Build optional body-shape note for the stylist prompt.
-    effective_notes = notes
+    # Stack the notes: user-typed → body shape → recent-taste signal.
+    # Order matters because Claude weights earlier prompt material more.
+    # We put the user's own notes first (most specific request), then
+    # body-shape guidance (stable), then the taste signal (recency-weighted).
+    note_blocks: list[str] = []
+    if notes:
+        note_blocks.append(notes)
     if body_shape:
         body_note = _BODY_SHAPE_GUIDANCE.get(body_shape, "")
         if body_note:
-            effective_notes = (
-                f"{notes}\n\n{body_note}" if notes else body_note
-            )
+            note_blocks.append(body_note)
+    if taste_note:
+        note_blocks.append(taste_note)
+    effective_notes = "\n\n".join(note_blocks) if note_blocks else None
 
     gateway = get_model_gateway()
     result: StylistResult = await gateway.stylist_compose(

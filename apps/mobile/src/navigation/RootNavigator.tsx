@@ -9,6 +9,7 @@ import { AddItemScreen } from "@/screens/Closet/AddItemScreen";
 import { ClosetScreen } from "@/screens/Closet/ClosetScreen";
 import { GapsScreen } from "@/screens/Closet/GapsScreen";
 import { ItemDetailScreen } from "@/screens/Closet/ItemDetailScreen";
+import { ScanReviewScreen } from "@/screens/Closet/ScanReviewScreen";
 import { FamilyScreen } from "@/screens/Family/FamilyScreen";
 import { AddMemberScreen } from "@/screens/Family/AddMemberScreen";
 import { SignInScreen } from "@/screens/Auth/SignInScreen";
@@ -16,6 +17,7 @@ import { StyleScreen } from "@/screens/Style/StyleScreen";
 import { OutfitDetailScreen } from "@/screens/Style/OutfitDetailScreen";
 import { BasePhotoScreen } from "@/screens/You/BasePhotoScreen";
 import { BodyShapeScreen } from "@/screens/You/BodyShapeScreen";
+import { GenderScreen } from "@/screens/You/GenderScreen";
 import { StylePreferenceScreen } from "@/screens/You/StylePreferenceScreen";
 import { YouScreen } from "@/screens/You/YouScreen";
 
@@ -30,6 +32,10 @@ export type RootStackParamList = {
   BasePhoto: undefined;
   StylePreference: undefined;
   BodyShape: undefined;
+  Gender: undefined;
+  ScanReview: {
+    regions: { preview_key: string; bbox: number[]; label: string | null }[];
+  };
 };
 
 const Tab = createBottomTabNavigator();
@@ -124,6 +130,16 @@ export function RootNavigator() {
             name="BodyShape"
             component={BodyShapeScreen}
             options={{ title: "Body shape" }}
+          />
+          <Stack.Screen
+            name="Gender"
+            component={GenderScreen}
+            options={{ title: "Gender preference" }}
+          />
+          <Stack.Screen
+            name="ScanReview"
+            component={ScanReviewScreen}
+            options={{ title: "Review items" }}
           />
         </>
       )}

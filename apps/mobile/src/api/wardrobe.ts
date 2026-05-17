@@ -90,6 +90,43 @@ export const wardrobeApi = {
     });
   },
 
+  /**
+   * Run SAM 2 over an uploaded photo and return per-garment previews.
+   *
+   * Used by the "I have a photo of 3 things laid out" flow on AddItemScreen.
+   * Costs ~$0.04 per scan so this is only triggered when the user taps the
+   * explicit "Scan for multiple items" button.
+   */
+  async scanForMultiple(
+    objectKey: string,
+    owner: { kind: OwnerKind; id?: string },
+  ) {
+    return api<{
+      regions: { preview_key: string; bbox: number[]; label: string | null }[];
+    }>("/wardrobe/items/scan", {
+      method: "POST",
+      json: { object_key: objectKey, owner_kind: owner.kind, owner_id: owner.id },
+    });
+  },
+
+  /**
+   * Commit N items from a user-approved SAM 2 scan. The object_keys are the
+   * `preview_key` values returned by `scanForMultiple`.
+   */
+  async createBulk(
+    objectKeys: string[],
+    owner: { kind: OwnerKind; id?: string },
+  ) {
+    return api<WardrobeItem[]>("/wardrobe/items/bulk", {
+      method: "POST",
+      json: {
+        object_keys: objectKeys,
+        owner_kind: owner.kind,
+        owner_id: owner.id,
+      },
+    });
+  },
+
   async listItems(owner: { kind: OwnerKind; id?: string }, category?: string) {
     const params = new URLSearchParams({ owner_kind: owner.kind });
     if (owner.id) params.set("owner_id", owner.id);
@@ -111,4 +148,31 @@ export const wardrobeApi = {
   async remove(itemId: string) {
     return api<void>(`/wardrobe/items/${itemId}`, { method: "DELETE" });
   },
+
+  /**
+   * Aggregate closet hygiene signals — stale items, overcrowded categories,
+   * dormant tags. Used by the "Closet insights" card on You.
+   */
+  async getInsights(owner: { kind: OwnerKind; id?: string }) {
+    const params = new URLSearchParams({ owner_kind: owner.kind });
+    if (owner.id) params.set("owner_id", owner.id);
+    return api<ClosetInsights>(`/wardrobe/insights?${params.toString()}`);
+  },
 };
+
+export interface StaleItem {
+  item_id: string;
+  category: string | null;
+  thumbnail_key: string | null;
+  last_worn_at: string | null;
+  days_unworn: number;
+}
+
+export interface ClosetInsights {
+  total_items: number;
+  worn_items: number;
+  never_worn_items: number;
+  stale_items: StaleItem[];
+  overcrowded_categories: { category: string; count: number; threshold: number }[];
+  underused_categories: { category: string; count: number }[];
+}
