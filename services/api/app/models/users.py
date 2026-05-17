@@ -38,6 +38,7 @@ class User(Base):
     display_name: Mapped[str | None] = mapped_column(String(120))
     locale: Mapped[str] = mapped_column(String(10), default="en-US")
     birth_year: Mapped[int | None] = mapped_column(SmallInteger)
+    base_photo_key: Mapped[str | None] = mapped_column(String(512))
 
     created_at: Mapped[datetime] = created_at_col()
     updated_at: Mapped[datetime] = updated_at_col()

@@ -34,6 +34,7 @@ class FamilyMember(Base):
     )
     birth_year: Mapped[int | None] = mapped_column(SmallInteger)
     kid_mode: Mapped[bool] = mapped_column(Boolean, default=True)
+    base_photo_key: Mapped[str | None] = mapped_column(String(512))
 
     created_at: Mapped[datetime] = created_at_col()
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

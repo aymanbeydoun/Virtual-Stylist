@@ -60,6 +60,21 @@ class GapAnalysisResult:
     model_id: str
 
 
+@dataclass
+class TryonInput:
+    """One garment image + its slot label, so the prompt can name what it is."""
+
+    image_bytes: bytes
+    slot: str  # 'top' | 'bottom' | 'outerwear' | 'shoes' | 'dress' | 'accessory'
+    description: str | None = None  # eg. 'red leather sneaker'
+
+
+@dataclass
+class TryonResult:
+    image_bytes: bytes
+    model_id: str
+
+
 class ModelGateway(Protocol):
     async def tag_item(self, image_bytes: bytes) -> TagResult: ...
     async def remove_background(self, image_bytes: bytes) -> bytes: ...
@@ -79,6 +94,12 @@ class ModelGateway(Protocol):
         items: list[dict[str, Any]],
         owner_label: str,
     ) -> GapAnalysisResult: ...
+    async def try_on_outfit(
+        self,
+        *,
+        person_image: bytes,
+        garments: list[TryonInput],
+    ) -> TryonResult: ...
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +211,16 @@ class StubGateway:
                 }
             )
         return GapAnalysisResult(findings=findings, model_id="stub-gaps-v0")
+
+    async def try_on_outfit(
+        self,
+        *,
+        person_image: bytes,
+        garments: list[TryonInput],
+    ) -> TryonResult:
+        # Stub: just echo the person photo back — lets the UI render something
+        # in offline dev without spending Replicate credits.
+        return TryonResult(image_bytes=person_image, model_id="stub-tryon-v0")
 
 
 # ---------------------------------------------------------------------------
@@ -358,6 +389,10 @@ class ProductionGateway:
         anthropic_vision_model: str,
         bg_removal_model: str,
         clip_model: str,
+        tryon_model: str = (
+            "google/nano-banana:"
+            "5bdc2c7cd642ae33611d8c33f79615f98ff02509ab8db9d8ec1cc6c36d378fba"
+        ),
     ) -> None:
         from anthropic import AsyncAnthropic
 
@@ -367,6 +402,7 @@ class ProductionGateway:
         self._anthropic_vision_model = anthropic_vision_model
         self._bg_removal_model = bg_removal_model
         self._clip_model = clip_model
+        self._tryon_model = tryon_model
         self._http = httpx.AsyncClient(
             base_url="https://api.replicate.com/v1",
             headers={"Authorization": f"Token {replicate_api_token}"},
@@ -594,6 +630,61 @@ class ProductionGateway:
             model_id=self._anthropic_model,
         )
 
+    async def try_on_outfit(
+        self,
+        *,
+        person_image: bytes,
+        garments: list[TryonInput],
+    ) -> TryonResult:
+        """Render the person wearing every garment in one nano-banana call.
+
+        nano-banana (Gemini 2.5 image edit) accepts an ordered array of input
+        images and a single prompt that can reference them by position. One call
+        produces a photorealistic composite. We pass the person first, then
+        garments in slot order so the prompt's references stay deterministic.
+        """
+        if not self._replicate_token:
+            raise RuntimeError("REPLICATE_API_TOKEN required for try-on")
+        if not garments:
+            raise ValueError("at least one garment required")
+
+        # Build the prompt: enumerate garments by slot so Gemini knows what to
+        # put where. nano-banana follows positional references reliably.
+        slot_phrases = []
+        for idx, g in enumerate(garments, start=2):  # person is image 1
+            desc = g.description or g.slot
+            slot_phrases.append(f"the {g.slot} from image {idx} ({desc})")
+        garments_phrase = ", ".join(slot_phrases)
+
+        prompt = (
+            f"Replace the clothing in image 1 to make the person wear "
+            f"{garments_phrase}. Keep the same pose, body, face, hair, and "
+            f"background. Photorealistic full-body fashion photography, sharp focus, "
+            f"natural lighting."
+        )
+
+        def _to_data_url(b: bytes) -> str:
+            mime = _detect_image_media_type(b)
+            return f"data:{mime};base64,{base64.b64encode(b).decode()}"
+
+        image_input = [_to_data_url(person_image)] + [_to_data_url(g.image_bytes) for g in garments]
+
+        _, version = self._tryon_model.split(":", 1)
+        result_url = await self._run_replicate(
+            version,
+            {
+                "prompt": prompt,
+                "image_input": image_input,
+                "aspect_ratio": "match_input_image",
+                "output_format": "jpg",
+            },
+        )
+
+        async with httpx.AsyncClient(timeout=60.0) as c:
+            r = await c.get(result_url)
+            r.raise_for_status()
+            return TryonResult(image_bytes=r.content, model_id=self._tryon_model.split(":")[0])
+
     async def aclose(self) -> None:
         await self._http.aclose()
 
@@ -618,6 +709,7 @@ def get_model_gateway() -> ModelGateway:
             anthropic_vision_model=s.anthropic_vision_model,
             bg_removal_model=s.replicate_bg_removal_model,
             clip_model=s.replicate_clip_model,
+            tryon_model=s.replicate_tryon_model,
         )
     else:
         _gateway_instance = StubGateway()
@@ -643,6 +735,7 @@ class AnthropicGateway(ProductionGateway):
             anthropic_vision_model=s.anthropic_vision_model,
             bg_removal_model=s.replicate_bg_removal_model,
             clip_model=s.replicate_clip_model,
+            tryon_model=s.replicate_tryon_model,
         )
 
 

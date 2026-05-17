@@ -76,3 +76,21 @@ export interface GapFinding {
   search_query: string | null;
   created_at: string;
 }
+
+export type TryonStatus = "pending" | "ready" | "failed";
+
+export interface OutfitTryon {
+  id: string;
+  outfit_id: string;
+  base_photo_key: string;
+  rendered_image_key: string | null;
+  status: TryonStatus;
+  model_id: string | null;
+  error_message: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface BasePhoto {
+  base_photo_key: string | null;
+}

@@ -13,6 +13,7 @@ from app.db import SessionLocal
 from app.models.wardrobe import Pattern, WardrobeItem
 from app.services.model_gateway import get_model_gateway
 from app.services.outfit_compositor import compose_outfit_image
+from app.services.tryon_worker import tryon_outfit
 
 logger = structlog.get_logger()
 
@@ -100,7 +101,7 @@ async def ingest_item(ctx: dict[str, Any], item_id: str) -> None:
 
 
 class WorkerSettings:
-    functions: ClassVar[list[Any]] = [ingest_item, compose_outfit_image]
+    functions: ClassVar[list[Any]] = [ingest_item, compose_outfit_image, tryon_outfit]
     # Longer connect-timeout absorbs flaky Docker-bridge Redis reconnects on macOS.
     # Each Claude/Replicate call can take 30-60s — Arq's default 300s job timeout is fine.
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)

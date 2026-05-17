@@ -14,6 +14,7 @@ import { AddMemberScreen } from "@/screens/Family/AddMemberScreen";
 import { SignInScreen } from "@/screens/Auth/SignInScreen";
 import { StyleScreen } from "@/screens/Style/StyleScreen";
 import { OutfitDetailScreen } from "@/screens/Style/OutfitDetailScreen";
+import { BasePhotoScreen } from "@/screens/You/BasePhotoScreen";
 import { YouScreen } from "@/screens/You/YouScreen";
 
 export type RootStackParamList = {
@@ -24,6 +25,7 @@ export type RootStackParamList = {
   OutfitDetail: { outfitId: string };
   SignIn: undefined;
   Gaps: undefined;
+  BasePhoto: undefined;
 };
 
 const Tab = createBottomTabNavigator();
@@ -95,6 +97,11 @@ export function RootNavigator() {
             options={{ title: "Outfit" }}
           />
           <Stack.Screen name="Gaps" component={GapsScreen} options={{ title: "Closet gaps" }} />
+          <Stack.Screen
+            name="BasePhoto"
+            component={BasePhotoScreen}
+            options={{ title: "Your photo" }}
+          />
         </>
       )}
     </Stack.Navigator>

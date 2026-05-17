@@ -84,6 +84,10 @@ class Settings(BaseSettings):
         "krthr/clip-embeddings:"
         "1c0371070cb827ec3c7f2f28adcdde54b50dcd239aa6faea0bc98b174ef03fb4"
     )
+    replicate_tryon_model: str = (
+        "google/nano-banana:"
+        "5bdc2c7cd642ae33611d8c33f79615f98ff02509ab8db9d8ec1cc6c36d378fba"
+    )
 
     openweather_api_key: str = ""
 
