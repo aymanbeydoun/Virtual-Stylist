@@ -81,11 +81,11 @@ export function BasePhotoScreen() {
           source === "camera"
             ? await ImagePicker.launchCameraAsync({
                 quality: 0.85,
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                mediaTypes: ["images"],
               })
             : await ImagePicker.launchImageLibraryAsync({
                 quality: 0.85,
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                mediaTypes: ["images"],
               });
         if (result.canceled) return;
         const asset = result.assets[0];
