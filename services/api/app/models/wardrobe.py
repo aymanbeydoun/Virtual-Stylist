@@ -66,6 +66,9 @@ class WardrobeItem(Base):
     quality_tier: Mapped[str] = mapped_column(String(16), default="standard")
 
     status: Mapped[str] = mapped_column(String(20), default="pending")
+    # Human-readable reason populated when status='failed' — surfaced on the
+    # mobile so the user knows what to fix.
+    failure_reason: Mapped[str | None] = mapped_column(Text)
 
     created_at: Mapped[datetime] = created_at_col()
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

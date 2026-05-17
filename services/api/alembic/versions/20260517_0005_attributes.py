@@ -55,8 +55,15 @@ def upgrade() -> None:
         sa.Column("body_shape", sa.String(length=30), nullable=True),
     )
 
+    # Human-readable reason surfaced to the mobile when an item fails to tag.
+    op.add_column(
+        "wardrobe_items",
+        sa.Column("failure_reason", sa.Text(), nullable=True),
+    )
+
 
 def downgrade() -> None:
+    op.drop_column("wardrobe_items", "failure_reason")
     op.drop_column("style_profiles", "body_shape")
     op.drop_index("ix_wardrobe_items_attributes_gin", table_name="wardrobe_items")
     op.drop_column("wardrobe_items", "quality_tier")

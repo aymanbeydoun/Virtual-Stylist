@@ -173,6 +173,24 @@ async def _get_or_create_dev_user(db: AsyncSession, dev_user_id: str | None) -> 
     return user
 
 
+async def _set_rls_user_id(db: AsyncSession, user_id: uuid.UUID) -> None:
+    """Set the current user id for Postgres Row-Level Security policies.
+
+    `SET LOCAL` is scoped to the current transaction, so subsequent queries on
+    this session see the value. Safe no-op on databases without the policies
+    (the setting is just an unused custom GUC).
+
+    Note: SET LOCAL does NOT accept bind parameters, so we interpolate the
+    UUID directly. SQL injection is impossible because `user_id` is a typed
+    uuid.UUID — its string form is constrained to hex + dashes.
+    """
+    from sqlalchemy import text
+
+    # Re-stringify via UUID to defensively reject any non-UUID input.
+    safe_uid = str(uuid.UUID(str(user_id)))
+    await db.execute(text(f"SET LOCAL app.current_user_id = '{safe_uid}'"))
+
+
 async def get_current_user(
     db: Annotated[AsyncSession, Depends(get_db)],
     authorization: Annotated[str | None, Header()] = None,
@@ -199,10 +217,14 @@ async def get_current_user(
         assert authorization is not None
         token = authorization.split(" ", 1)[1].strip()
         claims = await _verify_jwt(token)
-        return await _user_from_claims(db, claims)
+        user = await _user_from_claims(db, claims)
+        await _set_rls_user_id(db, user.id)
+        return user
 
     if settings.dev_auth_bypass:
-        return await _get_or_create_dev_user(db, x_dev_user_id)
+        user = await _get_or_create_dev_user(db, x_dev_user_id)
+        await _set_rls_user_id(db, user.id)
+        return user
 
     if not has_bearer:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "missing bearer token")

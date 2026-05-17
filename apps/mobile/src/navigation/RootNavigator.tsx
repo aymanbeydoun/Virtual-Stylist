@@ -15,6 +15,7 @@ import { SignInScreen } from "@/screens/Auth/SignInScreen";
 import { StyleScreen } from "@/screens/Style/StyleScreen";
 import { OutfitDetailScreen } from "@/screens/Style/OutfitDetailScreen";
 import { BasePhotoScreen } from "@/screens/You/BasePhotoScreen";
+import { BodyShapeScreen } from "@/screens/You/BodyShapeScreen";
 import { StylePreferenceScreen } from "@/screens/You/StylePreferenceScreen";
 import { YouScreen } from "@/screens/You/YouScreen";
 
@@ -28,6 +29,7 @@ export type RootStackParamList = {
   Gaps: undefined;
   BasePhoto: undefined;
   StylePreference: undefined;
+  BodyShape: undefined;
 };
 
 const Tab = createBottomTabNavigator();
@@ -117,6 +119,11 @@ export function RootNavigator() {
             name="StylePreference"
             component={StylePreferenceScreen}
             options={{ title: "Default style" }}
+          />
+          <Stack.Screen
+            name="BodyShape"
+            component={BodyShapeScreen}
+            options={{ title: "Body shape" }}
           />
         </>
       )}

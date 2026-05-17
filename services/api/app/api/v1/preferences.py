@@ -16,14 +16,31 @@ from app.schemas.stylist import Style
 router = APIRouter()
 
 
+BodyShape = Literal[
+    "rectangle",
+    "hourglass",
+    "pear",
+    "apple",
+    "inverted_triangle",
+    "athletic",
+]
+
+
 class StylePreferenceOut(BaseModel):
     preferred_style: Style | None
+    body_shape: BodyShape | None = None
     owner_kind: OwnerKind
     owner_id: uuid.UUID
 
 
 class StylePreferenceIn(BaseModel):
     preferred_style: Style | None  # null clears it
+    owner_kind: OwnerKind = OwnerKind.user
+    owner_id: uuid.UUID | None = None
+
+
+class BodyShapeIn(BaseModel):
+    body_shape: BodyShape | None
     owner_kind: OwnerKind = OwnerKind.user
     owner_id: uuid.UUID | None = None
 
@@ -83,6 +100,7 @@ async def get_style_preference(
     profile = await _profile(db, resolved_kind, resolved_id)
     return StylePreferenceOut(
         preferred_style=_coerce_style(profile.preferred_style),
+        body_shape=_coerce_body_shape(profile.body_shape),
         owner_kind=resolved_kind,
         owner_id=resolved_id,
     )
@@ -103,6 +121,28 @@ async def set_style_preference(
     await db.refresh(profile)
     return StylePreferenceOut(
         preferred_style=_coerce_style(profile.preferred_style),
+        body_shape=_coerce_body_shape(profile.body_shape),
+        owner_kind=resolved_kind,
+        owner_id=resolved_id,
+    )
+
+
+@router.put("/body-shape", response_model=StylePreferenceOut)
+async def set_body_shape(
+    body: BodyShapeIn,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> StylePreferenceOut:
+    resolved_kind, resolved_id = await _resolve_owner_for_prefs(
+        db, user.id, body.owner_kind, body.owner_id
+    )
+    profile = await _profile(db, resolved_kind, resolved_id)
+    profile.body_shape = body.body_shape
+    await db.commit()
+    await db.refresh(profile)
+    return StylePreferenceOut(
+        preferred_style=_coerce_style(profile.preferred_style),
+        body_shape=_coerce_body_shape(profile.body_shape),
         owner_kind=resolved_kind,
         owner_id=resolved_id,
     )
@@ -125,6 +165,17 @@ _VALID_STYLES: set[str] = {
 
 def _coerce_style(raw: str | None) -> Style | None:
     if raw and raw in _VALID_STYLES:
+        return raw  # type: ignore[return-value]
+    return None
+
+
+_VALID_BODY_SHAPES: set[str] = {
+    "rectangle", "hourglass", "pear", "apple", "inverted_triangle", "athletic",
+}
+
+
+def _coerce_body_shape(raw: str | None) -> BodyShape | None:
+    if raw and raw in _VALID_BODY_SHAPES:
         return raw  # type: ignore[return-value]
     return None
 

@@ -90,9 +90,35 @@ class TryonResult:
     model_id: str
 
 
+@dataclass
+class SegmentationMask:
+    """One detected garment region with its alpha mask."""
+
+    mask_bytes: bytes  # PNG with alpha channel
+    bounding_box: tuple[int, int, int, int]  # (x, y, w, h)
+    label: str | None = None  # what the segmenter thinks this is
+
+
 class ModelGateway(Protocol):
     async def tag_item(self, image_bytes: bytes) -> TagResult: ...
-    async def remove_background(self, image_bytes: bytes) -> bytes: ...
+    async def remove_background(
+        self, image_bytes: bytes, quality_tier: str = "standard"
+    ) -> bytes: ...
+    async def segment_garments(
+        self, image_bytes: bytes, hints: list[str] | None = None
+    ) -> list[SegmentationMask]:
+        """Detect multiple garments in one photo (SAM 2 / instance seg).
+
+        STUB — full implementation deferred. When wired, this enables:
+          - "We see 3 items in this photo, add them all?" flow.
+          - Fine-grained accessory cutouts (jewelry, glasses) that bg-removal
+            today swallows into the silhouette.
+          - Per-garment quality_tier routing.
+
+        Until then, returns an empty list. The pipeline falls back to the
+        single-garment bg-removal path that exists today.
+        """
+        ...
     async def stylist_compose(
         self,
         *,
@@ -176,8 +202,17 @@ class StubGateway:
             },
         )
 
-    async def remove_background(self, image_bytes: bytes) -> bytes:
+    async def remove_background(
+        self, image_bytes: bytes, quality_tier: str = "standard"
+    ) -> bytes:
+        del quality_tier
         return image_bytes
+
+    async def segment_garments(
+        self, image_bytes: bytes, hints: list[str] | None = None
+    ) -> list[SegmentationMask]:
+        del image_bytes, hints
+        return []  # stub: SAM 2 wiring deferred
 
     async def stylist_compose(
         self,
@@ -387,6 +422,28 @@ Compose 2-3 complete outfits. Hard rules:
   sandals; no shoes that ruin in sand), gym=0-3, travel=2-6.
 - Include accessories (jewelry/belt/hat/bag) when they elevate the look.
 
+Fabric + texture compatibility (treat as soft rules; explain any violation in
+the rationale):
+- Don't mix more than two strongly contrasting textures (silk + cashmere is
+  fine; silk + leather + denim + technical is chaos).
+- Heavyweight outerwear (puffer, wool coat) needs heavyweight or midweight
+  fabrics underneath. Don't pair a silk slip dress with a wool overcoat.
+- Lightweight/sheer fabrics call for layering or a higher-formality context
+  (silk camisole alone is loungewear; with tailored trousers, dinner).
+- Leather + fur in the same outfit = avoid unless requested.
+
+Color harmony (output must satisfy AT LEAST ONE):
+- Monochrome (all items within one color family, varying tone/value).
+- Neutral base + one accent (≤1 saturated colour; rest neutral).
+- Complementary pair (e.g. terracotta + teal — used sparingly).
+- Analogous trio (e.g. cream, oatmeal, camel).
+Never combine 3+ saturated colours from different families. If the only
+matching candidates would violate this, surface it in the rationale rather
+than silently shipping a clashing outfit.
+
+Output exactly 2-3 outfits, ranked by your confidence (best first).
+Never return more than 3.
+
 Output ONLY this JSON, no markdown:
 {
   "outfits": [
@@ -534,6 +591,7 @@ class ProductionGateway:
             "google/nano-banana:"
             "5bdc2c7cd642ae33611d8c33f79615f98ff02509ab8db9d8ec1cc6c36d378fba"
         ),
+        bg_removal_model_premium: str | None = None,
     ) -> None:
         from anthropic import AsyncAnthropic
 
@@ -542,6 +600,9 @@ class ProductionGateway:
         self._anthropic_model = anthropic_model
         self._anthropic_vision_model = anthropic_vision_model
         self._bg_removal_model = bg_removal_model
+        # If no premium model is configured, fall back to standard — keeps the
+        # routing harmless until someone explicitly opts into a premium tier.
+        self._bg_removal_model_premium = bg_removal_model_premium or bg_removal_model
         self._clip_model = clip_model
         self._tryon_model = tryon_model
         self._http = httpx.AsyncClient(
@@ -556,19 +617,30 @@ class ProductionGateway:
         # process slowly but reliably without burning credits on retries.
         self._replicate_semaphore = asyncio.Semaphore(1)
 
-    async def remove_background(self, image_bytes: bytes) -> bytes:
-        """Replicate-based bg removal. Degrades to a pass-through on any failure
-        so the rest of the pipeline (Claude Vision tagging) still runs.
+    async def remove_background(
+        self, image_bytes: bytes, quality_tier: str = "standard"
+    ) -> bytes:
+        """Replicate-based bg removal with two-tier routing.
 
-        We intentionally swallow exceptions here because background removal is
-        a quality upgrade, not a correctness requirement. The tagger only needs
-        the photo; the user just loses the cutout look.
+        - quality_tier="premium" uses self._bg_removal_model_premium (typically
+          a slower, higher-quality matting model — MODNet / Cascade-PSP / etc.).
+        - quality_tier="standard" (default) uses self._bg_removal_model.
+
+        Degrades to a pass-through on any failure so the rest of the pipeline
+        (Claude Vision tagging) still runs. Background removal is a quality
+        upgrade, not a correctness requirement — the tagger only needs the
+        photo, the user just loses the cutout look on failure.
         """
         if not self._replicate_token:
             return image_bytes
+        model = (
+            self._bg_removal_model_premium
+            if quality_tier == "premium"
+            else self._bg_removal_model
+        )
         try:
             data_url = "data:image/jpeg;base64," + base64.b64encode(image_bytes).decode()
-            _, version = self._bg_removal_model.split(":", 1)
+            _, version = model.split(":", 1)
             result_url = await self._run_replicate(version, {"image": data_url})
             async with httpx.AsyncClient(timeout=30.0) as c:
                 r = await c.get(result_url)
@@ -578,10 +650,30 @@ class ProductionGateway:
             logger.warning(
                 "replicate.bg_removal_failed",
                 exc_info=False,
+                tier=quality_tier,
                 error_type=type(exc).__name__,
                 error_msg=str(exc)[:160],
             )
             return image_bytes
+
+    async def segment_garments(
+        self, image_bytes: bytes, hints: list[str] | None = None
+    ) -> list[SegmentationMask]:
+        """Multi-garment detection via SAM 2. NOT WIRED YET — returns empty.
+
+        When implemented, the flow will be:
+          1. Send image to Replicate's meta/sam-2 endpoint with auto-mask mode.
+          2. For each returned mask, crop + alpha-composite the source image
+             to produce a per-garment cutout.
+          3. Optionally run Claude Vision on each crop to label it
+             (top / bottom / shoes / accessory).
+          4. Return a list of SegmentationMask objects the caller turns into
+             individual WardrobeItem rows.
+
+        Caller falls back to single-garment bg-removal when this returns [].
+        """
+        del image_bytes, hints
+        return []
 
     async def tag_item(self, image_bytes: bytes) -> TagResult:
         tagged = await self._tag_with_claude(image_bytes)
@@ -920,6 +1012,7 @@ def get_model_gateway() -> ModelGateway:
             anthropic_model=s.anthropic_model,
             anthropic_vision_model=s.anthropic_vision_model,
             bg_removal_model=s.replicate_bg_removal_model,
+            bg_removal_model_premium=s.replicate_bg_removal_model_premium,
             clip_model=s.replicate_clip_model,
             tryon_model=s.replicate_tryon_model,
         )

@@ -24,6 +24,7 @@ dependencies = [
     "slowapi>=0.1.9",
     "replicate>=1.0.7",
     "pillow-heif>=1.3.0",
+    "numpy>=2.4.4",
 ]
 
 [dependency-groups]

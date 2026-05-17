@@ -29,8 +29,11 @@ export interface WardrobeItem {
   pattern: string | null;
   formality: number | null;
   seasonality: string[];
+  attributes?: Record<string, unknown>;
+  quality_tier?: "standard" | "premium";
   needs_review: boolean;
   status: "pending" | "ready" | "failed";
+  failure_reason?: string | null;
   created_at: string;
 }
 

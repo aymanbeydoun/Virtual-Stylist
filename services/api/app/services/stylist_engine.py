@@ -36,6 +36,20 @@ async def _resolved_default_style(
     ).scalar_one_or_none()
     return profile.preferred_style if profile else None
 
+
+async def _resolved_body_shape(
+    db: AsyncSession, owner_kind: OwnerKind, owner_id: uuid.UUID
+) -> str | None:
+    profile = (
+        await db.execute(
+            select(StyleProfile).where(
+                StyleProfile.owner_kind == owner_kind,
+                StyleProfile.owner_id == owner_id,
+            )
+        )
+    ).scalar_one_or_none()
+    return profile.body_shape if profile else None
+
 _CATEGORY_TO_SLOT = {
     "tops": OutfitSlot.top,
     "bottoms": OutfitSlot.bottom,
@@ -45,6 +59,43 @@ _CATEGORY_TO_SLOT = {
     "accessories": OutfitSlot.accessory,
     "jewelry": OutfitSlot.jewelry,
 }
+
+# Per-body-shape stylist guidance — kept short so it doesn't blow the prompt
+# budget but specific enough that Claude actually changes the recommendation.
+# Reference: standard women's/men's fashion-school body-shape framework.
+_BODY_SHAPE_GUIDANCE: dict[str, str] = {
+    "rectangle": (
+        "Wearer has a rectangle body shape (shoulders ≈ waist ≈ hips). Create curves "
+        "with belted waists, peplum tops, structured shoulders. Avoid straight shift "
+        "dresses and boxy outerwear."
+    ),
+    "hourglass": (
+        "Wearer has an hourglass body shape (defined waist, balanced shoulders/hips). "
+        "Lean into fitted waists, wrap dresses, high-rise bottoms. Avoid oversized "
+        "silhouettes that hide the waist."
+    ),
+    "pear": (
+        "Wearer has a pear body shape (hips wider than shoulders). Balance with "
+        "structured shoulders, statement tops, A-line or straight-leg bottoms. Avoid "
+        "skinny bottoms with simple tops, low-rise jeans, hip pockets."
+    ),
+    "apple": (
+        "Wearer has an apple body shape (fuller middle, slimmer legs). V-necklines, "
+        "vertical lines, empire waists, straight-leg or bootcut bottoms. Avoid "
+        "high-waisted belted looks, clingy fabric at the midsection."
+    ),
+    "inverted_triangle": (
+        "Wearer has an inverted triangle body shape (shoulders wider than hips). "
+        "Soft shoulder lines, scoop/V necks, wide-leg or A-line bottoms. Avoid "
+        "shoulder pads, boat necks, skinny bottoms with tight tops."
+    ),
+    "athletic": (
+        "Wearer has an athletic body shape (defined muscles, less curve). Add visual "
+        "softness with flowing fabrics, layered necklines, peplum or ruched waists. "
+        "Avoid stiff boxy fits that flatten the silhouette."
+    ),
+}
+
 
 _DESTINATION_FORMALITY = {
     "office": (5, 9),
@@ -154,7 +205,61 @@ def _serialize_candidate(item: WardrobeItem) -> dict[str, Any]:
         "pattern": item.pattern.value if item.pattern else None,
         "formality": item.formality,
         "seasonality": item.seasonality,
+        # Carry deep attributes through to the stylist prompt so it can apply
+        # fabric / fit / neckline reasoning. Empty {} when nothing tagged.
+        "attributes": item.attributes or {},
     }
+
+
+# Soft color-harmony scoring. Returns 0.0-1.0 where 1.0 means strong harmony.
+# Used post-LLM to surface clashing outfits to the rationale rather than
+# silently shipping them.
+def _outfit_harmony_score(items_with_colors: list[list[dict[str, Any]]]) -> float:
+    """Given a list of per-item color lists, return a coarse harmony score.
+
+    Algorithm: convert each dominant color to HSL, count how many distinct
+    *hue families* (60° buckets) appear. 1 family = monochrome (1.0).
+    2 families with one being neutral = analogous (0.9). 2 saturated families
+    that are ~180° apart = complementary (0.7). 3+ saturated families = clash
+    (0.3). Calibrated to be permissive; only flag the obvious chaos.
+    """
+    import colorsys
+
+    def _hue_family(hex_str: str) -> int | None:
+        try:
+            r, g, b = (int(hex_str[i : i + 2], 16) / 255 for i in (1, 3, 5))
+        except (ValueError, IndexError):
+            return None
+        h, _light, sat = colorsys.rgb_to_hls(r, g, b)
+        if sat < 0.15:  # neutral / greyscale
+            return -1
+        return int(h * 360) // 60  # 6 hue families
+
+    families: set[int] = set()
+    has_neutral = False
+    for item_colors in items_with_colors:
+        for c in item_colors[:1]:  # dominant only
+            hex_val = str(c.get("hex", ""))
+            fam = _hue_family(hex_val)
+            if fam is None:
+                continue
+            if fam == -1:
+                has_neutral = True
+            else:
+                families.add(fam)
+
+    sat_count = len(families)
+    if sat_count == 0:
+        return 1.0  # all neutrals
+    if sat_count == 1:
+        return 1.0 if has_neutral else 0.95
+    if sat_count == 2:
+        # Complementary check: families 0/3, 1/4, 2/5 are roughly opposite.
+        fams = sorted(families)
+        complementary = (fams[1] - fams[0]) == 3
+        return 0.9 if has_neutral else (0.75 if complementary else 0.6)
+    # 3+ saturated families
+    return 0.3
 
 
 def _validate(outfit: dict[str, Any], weather: WeatherSnapshot | None) -> str | None:
@@ -197,9 +302,19 @@ async def generate_outfits(
     # default in style_profiles so a streetwear-leaning user gets streetwear
     # by default without re-picking every time.
     resolved_style = style or await _resolved_default_style(db, owner_kind, owner_id)
+    body_shape = await _resolved_body_shape(db, owner_kind, owner_id)
 
     candidates = [_serialize_candidate(i) for i in items]
     item_by_id = {str(i.id): i for i in items}
+
+    # Build optional body-shape note for the stylist prompt.
+    effective_notes = notes
+    if body_shape:
+        body_note = _BODY_SHAPE_GUIDANCE.get(body_shape, "")
+        if body_note:
+            effective_notes = (
+                f"{notes}\n\n{body_note}" if notes else body_note
+            )
 
     gateway = get_model_gateway()
     result: StylistResult = await gateway.stylist_compose(
@@ -208,17 +323,44 @@ async def generate_outfits(
         mood=mood,
         style=resolved_style,
         weather=weather,
-        notes=notes,
+        notes=effective_notes,
         kid_mode=kid_mode,
     )
 
     used_ids: set[str] = set()
     outfits_orm: list[Outfit] = []
+    MAX_OUTFITS = 3
+
     for outfit_data in result.outfits:
+        if len(outfits_orm) >= MAX_OUTFITS:
+            break
         if _validate(outfit_data, weather):
             continue
         if any(i["item_id"] in used_ids for i in outfit_data["items"]):
             continue
+
+        # Color harmony post-check. We only DOWN-rank — if every outfit is
+        # below threshold we still ship them, because rejecting all of them
+        # leaves the user with nothing.
+        item_colors = [
+            item_by_id[i["item_id"]].colors  # list of ColorTag models
+            for i in outfit_data["items"]
+            if i["item_id"] in item_by_id
+        ]
+        as_dicts = [[c.model_dump(mode="json") for c in colors] for colors in item_colors]
+        harmony = _outfit_harmony_score(as_dicts)
+        # Combine the LLM's confidence with our harmony signal. 0.7 weight on
+        # LLM, 0.3 weight on harmony — lets the AI lead but penalises clashes.
+        raw_conf = float(outfit_data.get("confidence") or 0.7)
+        weighted_conf = 0.7 * raw_conf + 0.3 * harmony
+
+        rationale = outfit_data.get("rationale")
+        if harmony < 0.55 and rationale:
+            rationale = (
+                f"{rationale} (Note: this look mixes several saturated colors — "
+                f"try one of the alternates for a calmer palette.)"
+            )
+
         outfit = Outfit(
             owner_kind=owner_kind,
             owner_id=owner_id,
@@ -227,8 +369,8 @@ async def generate_outfits(
             mood=mood,
             style=resolved_style,
             weather_snapshot=weather,
-            rationale=outfit_data.get("rationale"),
-            confidence=outfit_data.get("confidence"),
+            rationale=rationale,
+            confidence=weighted_conf,
             model_id=result.model_id,
         )
         for entry in outfit_data["items"]:

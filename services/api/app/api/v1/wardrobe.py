@@ -170,6 +170,53 @@ async def correct_item(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.post("/items/{item_id}/retry", response_model=WardrobeItemOut)
+async def retry_item(
+    item_id: Annotated[uuid.UUID, Path()],
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> WardrobeItem:
+    """Re-enqueue a failed item through the ingest pipeline."""
+    item = await get_item(item_id, user, db)
+    item.status = "pending"
+    item.needs_review = False
+    await db.commit()
+    await db.refresh(item)
+
+    settings = get_settings()
+    if settings.ingest_inline:
+        from app.services.ingest_worker import ingest_item
+
+        await ingest_item({}, str(item.id))
+        await db.refresh(item)
+    else:
+        try:
+            redis = await create_pool(RedisSettings.from_dsn(settings.redis_url))
+            await redis.enqueue_job("ingest_item", str(item.id))
+            await redis.aclose()
+        except Exception:
+            from app.services.ingest_worker import ingest_item
+
+            await ingest_item({}, str(item.id))
+            await db.refresh(item)
+    return item
+
+
+@router.delete("/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_item(
+    item_id: Annotated[uuid.UUID, Path()],
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    """Soft-delete an item. Storage cleanup happens in a follow-up sweeper."""
+    from datetime import UTC, datetime
+
+    item = await get_item(item_id, user, db)
+    item.deleted_at = datetime.now(UTC)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.put("/_local_upload/{key:path}", include_in_schema=False)
 async def _local_upload(key: str, file: UploadFile) -> dict[str, str]:
     settings = get_settings()

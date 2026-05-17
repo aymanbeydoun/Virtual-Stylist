@@ -16,6 +16,7 @@ from app.db import SessionLocal
 from app.models.wardrobe import Pattern, WardrobeItem
 from app.services.model_gateway import get_model_gateway
 from app.services.outfit_compositor import compose_outfit_image
+from app.services.preflight import preflight_check
 from app.services.tryon_worker import tryon_outfit
 
 # Register HEIF/HEIC decoder so Pillow can open iPhone Camera default exports.
@@ -104,11 +105,24 @@ async def ingest_item(ctx: dict[str, Any], item_id: str) -> None:
                 error_msg=str(exc)[:200],
             )
             item.status = "failed"
+            item.failure_reason = "Couldn't decode the photo. Try a different file."
             await db.commit()
             return
 
+        # Preflight: cheap on-server check that catches obvious blur / tiny
+        # images before we spend Claude + Replicate credits on them.
+        pf = preflight_check(raw)
+        if not pf.ok:
+            item.status = "failed"
+            item.failure_reason = pf.reason
+            await db.commit()
+            logger.info("item.preflight_rejected", item_id=str(item.id), reason=pf.reason)
+            return
+
         try:
-            cutout = await gateway.remove_background(raw)
+            cutout = await gateway.remove_background(
+                raw, quality_tier=item.quality_tier or "standard"
+            )
             cutout_key = item.raw_image_key.replace("raw/", "cutout/")
             await storage.write_bytes(cutout_key, cutout)
 
@@ -129,6 +143,20 @@ async def ingest_item(ctx: dict[str, Any], item_id: str) -> None:
                 error_msg=str(exc)[:200],
             )
             item.status = "failed"
+            # Surface a useful reason to the mobile. We don't echo the full
+            # provider error (often technical) — just enough for the user to
+            # know to retake.
+            err_msg = str(exc).lower()
+            if "could not process image" in err_msg or "invalid_request" in err_msg:
+                item.failure_reason = (
+                    "The AI couldn't analyse this image. Try a clearer photo."
+                )
+            elif "payment" in err_msg or "402" in err_msg:
+                item.failure_reason = (
+                    "Tagging service is over budget. Try again in a moment."
+                )
+            else:
+                item.failure_reason = "Couldn't tag this photo. Tap to retry or delete."
             await db.commit()
             return
 

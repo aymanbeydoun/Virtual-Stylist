@@ -3,7 +3,7 @@ import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -170,12 +170,11 @@ export function OutfitDetailScreen() {
             </View>
           )}
           {t?.status === "pending" && (
-            <View style={styles.tryonPlaceholder}>
-              <ActivityIndicator color={palette.accent} size="large" />
-              <Text style={styles.tryonPlaceholderText}>
-                Rendering you in this look… 10-15s
-              </Text>
-            </View>
+            <PendingTryon
+              createdAt={t.created_at}
+              isRetrying={requestTryon.isPending}
+              onRetry={() => requestTryon.mutate()}
+            />
           )}
           {t?.status === "ready" && t.rendered_image_key && (
             <View>
@@ -285,6 +284,62 @@ export function OutfitDetailScreen() {
         </Pressable>
       </View>
     </KeyboardAvoidingView>
+  );
+}
+
+// nano-banana renders in ~10-15s. After 40s with no movement we surface a
+// retry CTA so the user is never stuck staring at a spinner.
+const TRYON_STALL_MS = 40_000;
+
+function PendingTryon({
+  createdAt,
+  isRetrying,
+  onRetry,
+}: {
+  createdAt: string;
+  isRetrying: boolean;
+  onRetry: () => void;
+}) {
+  const createdMs = useMemo(() => new Date(createdAt).getTime(), [createdAt]);
+  const [stalled, setStalled] = useState(false);
+  useEffect(() => {
+    const elapsed = Date.now() - createdMs;
+    if (elapsed >= TRYON_STALL_MS) {
+      setStalled(true);
+      return;
+    }
+    const timer = setTimeout(() => setStalled(true), TRYON_STALL_MS - elapsed);
+    return () => clearTimeout(timer);
+  }, [createdMs]);
+
+  if (stalled) {
+    return (
+      <View style={styles.tryonPlaceholder}>
+        <Ionicons name="time-outline" size={28} color={palette.textMuted} />
+        <Text style={styles.tryonPlaceholderText}>
+          Render is taking longer than usual.
+        </Text>
+        <Pressable
+          style={[styles.button, styles.primary]}
+          onPress={onRetry}
+          disabled={isRetrying}
+        >
+          {isRetrying ? (
+            <ActivityIndicator color={palette.onAccent} />
+          ) : (
+            <Text style={styles.primaryText}>Render again</Text>
+          )}
+        </Pressable>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.tryonPlaceholder}>
+      <ActivityIndicator color={palette.accent} size="large" />
+      <Text style={styles.tryonPlaceholderText}>
+        Rendering you in this look… 10-15s
+      </Text>
+    </View>
   );
 }
 

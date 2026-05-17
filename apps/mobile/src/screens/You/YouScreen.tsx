@@ -22,6 +22,15 @@ const STYLE_LABELS: Record<string, string> = {
   avant_garde: "Avant-garde",
 };
 
+const BODY_SHAPE_LABELS: Record<string, string> = {
+  rectangle: "Rectangle",
+  hourglass: "Hourglass",
+  pear: "Pear",
+  apple: "Apple",
+  inverted_triangle: "Inverted triangle",
+  athletic: "Athletic",
+};
+
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export function YouScreen() {
@@ -41,6 +50,7 @@ export function YouScreen() {
     queryFn: () => preferencesApi.getStyle(owner),
   });
   const currentStyle = stylePref.data?.preferred_style ?? null;
+  const currentBodyShape = stylePref.data?.body_shape ?? null;
 
   return (
     <SafeAreaView style={styles.root}>
@@ -75,6 +85,23 @@ export function YouScreen() {
               {currentStyle
                 ? "Applied to every outfit unless you override on the Style tab."
                 : "Pick a style aesthetic the AI applies by default."}
+            </Text>
+          </View>
+          <Text style={styles.arrow}>›</Text>
+        </Pressable>
+
+        <Pressable style={styles.tryonCard} onPress={() => nav.navigate("BodyShape")}>
+          <View style={[styles.tryonDot, currentBodyShape && { backgroundColor: "#7ce4a3" }]} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.tryonTitle}>
+              {currentBodyShape
+                ? `Body shape · ${BODY_SHAPE_LABELS[currentBodyShape] ?? currentBodyShape}`
+                : "Set body shape"}
+            </Text>
+            <Text style={styles.tryonBody}>
+              {currentBodyShape
+                ? "Stylist tailors silhouettes + necklines to your shape."
+                : "Helps the AI suggest the most flattering silhouettes."}
             </Text>
           </View>
           <Text style={styles.arrow}>›</Text>

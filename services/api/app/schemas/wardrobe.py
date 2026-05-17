@@ -53,6 +53,7 @@ class WardrobeItemOut(BaseModel):
     quality_tier: str = "standard"
     needs_review: bool
     status: str
+    failure_reason: str | None = None
     created_at: datetime
 
 

@@ -76,10 +76,30 @@ class Settings(BaseSettings):
     vertex_location: str = "us-central1"
 
     replicate_api_token: str = ""
-    # 851-labs/background-remover (transparent-background, MIT) — higher-quality
-    # mattes than lucataco's bg-remover, still cheap (~$0.005/run). MIT-licensed
-    # so commercial OK. Swap via env if needed.
+    # Two-tier bg-removal routing.
+    #
+    # Standard tier: 851-labs/background-remover (transparent-background, MIT).
+    # ~$0.005/run, 3-8s. Fine for solid garments, struggles with hair and
+    # wireframe accessories.
+    #
+    # Premium tier: configurable. Defaults to the standard model so a fresh
+    # deployment doesn't break; swap to a higher-quality alternative
+    # (MODNet, Cascade-PSP, Sapiens) by setting REPLICATE_BG_REMOVAL_MODEL_PREMIUM
+    # once you've benchmarked it. Candidates to evaluate:
+    #   - pollinations/modnet:da7d45f3b836795f945f221fc0b01a6d (trimap-free
+    #     portrait matting, excellent on hair edges; ~$0.02/run)
+    #   - cjwbw/rembg:fb8af171cfa1616ddcf1242c093f9c46 (different rembg variant)
+    #   - 851-labs's premium SKU when it ships
+    #
+    # Items are flagged via `wardrobe_items.quality_tier`. Default for new
+    # uploads is "standard"; mobile can opt an item into "premium" either
+    # explicitly or automatically if Claude Vision detects a model/skin in
+    # the photo.
     replicate_bg_removal_model: str = (
+        "851-labs/background-remover:"
+        "a029dff38972b5fda4ec5d75d7d1cd25aeff621d2cf4946a41055d7db66b80bc"
+    )
+    replicate_bg_removal_model_premium: str = (
         "851-labs/background-remover:"
         "a029dff38972b5fda4ec5d75d7d1cd25aeff621d2cf4946a41055d7db66b80bc"
     )
@@ -100,6 +120,11 @@ class Settings(BaseSettings):
     upload_rate_limit: str = "60/minute"
 
     ingest_inline: bool = False
+
+    # Feature flags
+    # Kid sub-profile creation is locked off until the VPC payment flow is wired
+    # (see docs/legal/COPPA.md §3). Set to true ONLY in dev + post-legal-review.
+    feature_kid_signup_enabled: bool = False
 
 
 @lru_cache

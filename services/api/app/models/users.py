@@ -80,6 +80,9 @@ class StyleProfile(Base):
     # `style` field overrides it. Free-text rather than enum so we can evolve
     # the taxonomy without migrations.
     preferred_style: Mapped[str | None] = mapped_column(String(40))
+    # Body-shape preference — drives the stylist's silhouette recommendations.
+    # Free-text rather than enum so we can evolve the taxonomy without migrations.
+    body_shape: Mapped[str | None] = mapped_column(String(30))
 
     created_at: Mapped[datetime] = created_at_col()
     updated_at: Mapped[datetime] = updated_at_col()

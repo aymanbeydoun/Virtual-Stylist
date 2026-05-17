@@ -189,5 +189,78 @@ async def test_user_from_claims_creates_then_returns_same(
     assert exc.value.status_code == 403
 
 
+def test_get_current_user_prefers_bearer_when_issuer_configured(
+    configured_issuer: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Smoke test for the precedence rule in get_current_user.
+
+    Rule: when both Authorization: Bearer AND X-Dev-User-Id are present and
+    the Auth0 issuer is configured, the Bearer path wins. Ensures that an
+    accidentally-leaked dev header on a production build can't shadow real
+    Auth0 sign-in.
+    """
+    private_key, jwks = _make_jwks()
+
+    async def fake_get_jwks(_url: str) -> dict[str, Any]:
+        return jwks
+
+    monkeypatch.setattr(auth, "_get_jwks", fake_get_jwks)
+    # Make dev-bypass true so the test confirms Bearer wins even then.
+    monkeypatch.setenv("DEV_AUTH_BYPASS", "true")
+    auth.get_settings.cache_clear()
+
+    token = _make_token(
+        private_key,
+        {
+            "sub": "auth0|precedence-test",
+            "email": "precedence@example.com",
+            "iss": configured_issuer,
+            "aud": "virtual-stylist-api",
+            "exp": int(time.time()) + 3600,
+            "iat": int(time.time()),
+        },
+    )
+
+    class _FakeDB:
+        executed: list[Any] = []  # noqa: RUF012
+
+        async def execute(self, _stmt: Any) -> Any:
+            self.__class__.executed.append(_stmt)
+
+            class _Result:
+                def scalar_one_or_none(self) -> Any:
+                    return None
+
+            return _Result()
+
+    # If Bearer wins, _user_from_claims will then try to db.add() which fails on
+    # the fake. If dev-bypass wins, we get HTTPException(400, "invalid X-Dev-User-Id")
+    # because "not-a-uuid" is not a valid UUID.
+    from fastapi import HTTPException as _HTTPException
+
+    raised: Exception | None = None
+    try:
+        asyncio.run(
+            auth.get_current_user(
+                _FakeDB(),  # type: ignore[arg-type]
+                authorization=f"Bearer {token}",
+                x_dev_user_id="not-a-uuid",
+            )
+        )
+    except _HTTPException as e:
+        raised = e
+    except AttributeError as e:
+        # Bearer branch failed at db.add — expected; provisioning happens after
+        # the verification we're testing. Good signal that Bearer won.
+        raised = e
+
+    if isinstance(raised, _HTTPException):
+        # Only legitimate 400 if the message names the dev header — that's the
+        # signal dev-bypass took over.
+        assert "X-Dev-User-Id" not in str(raised.detail), (
+            f"Bearer should have won, but dev-bypass ran: {raised.detail}"
+        )
+
+
 # Silence unused-import warning for uuid (imported for symmetry with auth.py).
 _ = uuid

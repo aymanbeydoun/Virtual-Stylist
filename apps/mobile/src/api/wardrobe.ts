@@ -103,4 +103,12 @@ export const wardrobeApi = {
       json: { field, new_value: newValue },
     });
   },
+
+  async retry(itemId: string) {
+    return api<WardrobeItem>(`/wardrobe/items/${itemId}/retry`, { method: "POST" });
+  },
+
+  async remove(itemId: string) {
+    return api<void>(`/wardrobe/items/${itemId}`, { method: "DELETE" });
+  },
 };
