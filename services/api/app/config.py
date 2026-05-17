@@ -133,6 +133,14 @@ class Settings(BaseSettings):
         "c871bb9b046607b680449ecbae55fd8c6d945e0a1948644bf2361b3d021d3ff4"
     )
 
+    # Modal-hosted FitDiT try-on endpoint. When set, the worker routes all
+    # try-on requests here instead of Replicate IDM-VTON. FitDiT is ~3x
+    # faster (~5s/garment vs ~17s) with comparable identity preservation,
+    # and Modal lets us autoscale 0→10 GPUs without the per-account
+    # serialized semaphore Replicate imposes. See infra/modal/README.md
+    # for the one-time setup steps.
+    modal_tryon_endpoint: str = ""
+
     openweather_api_key: str = ""
 
     cors_origins: list[str] = ["http://localhost:8081", "http://localhost:19006"]

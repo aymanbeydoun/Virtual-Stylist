@@ -693,11 +693,16 @@ class ProductionGateway:
             "5bdc2c7cd642ae33611d8c33f79615f98ff02509ab8db9d8ec1cc6c36d378fba"
         ),
         bg_removal_model_premium: str | None = None,
+        modal_tryon_endpoint: str | None = None,
     ) -> None:
         from anthropic import AsyncAnthropic
 
         self._anthropic = AsyncAnthropic(api_key=anthropic_api_key)
         self._replicate_token = replicate_api_token
+        # When set, try_on_outfit routes to the Modal-hosted FitDiT endpoint
+        # instead of Replicate IDM-VTON. Same chained-per-garment flow,
+        # ~3x faster per render. See infra/modal/fitdit_endpoint.py.
+        self._modal_tryon_endpoint = (modal_tryon_endpoint or "").rstrip("/")
         self._anthropic_model = anthropic_model
         self._anthropic_vision_model = anthropic_vision_model
         self._bg_removal_model = bg_removal_model
@@ -1252,14 +1257,11 @@ class ProductionGateway:
         but the renders are actually you.
         """
         del body_shape  # IDM-VTON doesn't take a drape hint; identity preservation handles fit
-        if not self._replicate_token:
-            raise RuntimeError("REPLICATE_API_TOKEN required for try-on")
         if not garments:
             raise ValueError("at least one garment required")
 
-        # IDM-VTON garment categories. We only render slots the model
-        # actually handles well; shoes/accessories/jewelry get skipped here
-        # (they're still part of the outfit data, just not rendered).
+        # Slot → model category. Same map for both IDM-VTON (Replicate) and
+        # FitDiT (Modal) — both use the upper_body/lower_body/dresses taxonomy.
         slot_to_category = {
             "top": "upper_body",
             "outerwear": "upper_body",
@@ -1269,7 +1271,7 @@ class ProductionGateway:
         renderable = [g for g in garments if g.slot in slot_to_category]
         if not renderable:
             raise RuntimeError(
-                "no renderable garments — IDM-VTON supports top/outerwear/"
+                "no renderable garments — try-on supports top/outerwear/"
                 "bottom/dress only"
             )
 
@@ -1279,9 +1281,27 @@ class ProductionGateway:
         order = {"dress": 0, "top": 1, "outerwear": 2, "bottom": 3}
         renderable.sort(key=lambda g: order.get(g.slot, 99))
 
+        # ----- Backend selection ----------------------------------------
+        # MODAL_TRYON_ENDPOINT set → route to self-hosted FitDiT on Modal
+        # (faster, world-class quality, no Replicate semaphore bottleneck).
+        # Otherwise fall back to IDM-VTON on Replicate.
+        if self._modal_tryon_endpoint:
+            current_person = person_image
+            for garment in renderable:
+                current_person = await self._modal_fitdit_step(
+                    person_bytes=current_person,
+                    garment=garment,
+                    category=slot_to_category[garment.slot],
+                )
+            return TryonResult(image_bytes=current_person, model_id="modal-fitdit")
+
+        if not self._replicate_token:
+            raise RuntimeError(
+                "set MODAL_TRYON_ENDPOINT (self-hosted FitDiT) or "
+                "REPLICATE_API_TOKEN (IDM-VTON) for try-on"
+            )
         _, version = self._tryon_model.split(":", 1)
         current_person = person_image
-
         for garment in renderable:
             current_person = await self._idm_vton_step(
                 version=version,
@@ -1294,6 +1314,34 @@ class ProductionGateway:
             image_bytes=current_person,
             model_id=self._tryon_model.split(":")[0],
         )
+
+    async def _modal_fitdit_step(
+        self,
+        *,
+        person_bytes: bytes,
+        garment: TryonInput,
+        category: str,
+    ) -> bytes:
+        """One FitDiT prediction via the Modal-hosted endpoint."""
+        desc = _strip_gender(garment.description) or garment.slot
+        payload = {
+            "person_image": base64.b64encode(person_bytes).decode(),
+            "garment_image": base64.b64encode(garment.image_bytes).decode(),
+            "category": category,
+            "garment_description": desc,
+            "steps": 30,
+        }
+        async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=30.0)) as c:
+            r = await c.post(self._modal_tryon_endpoint, json=payload)
+            r.raise_for_status()
+            body = r.json()
+        err = body.get("error")
+        if err:
+            raise RuntimeError(f"Modal FitDiT failed: {err}")
+        out_b64 = body.get("image_b64")
+        if not out_b64:
+            raise RuntimeError("Modal FitDiT returned no image")
+        return base64.b64decode(out_b64)
 
     async def _idm_vton_step(
         self,
@@ -1415,6 +1463,7 @@ def get_model_gateway() -> ModelGateway:
             bg_removal_model_premium=s.replicate_bg_removal_model_premium,
             clip_model=s.replicate_clip_model,
             tryon_model=s.replicate_tryon_model,
+            modal_tryon_endpoint=s.modal_tryon_endpoint,
         )
     else:
         _gateway_instance = StubGateway()

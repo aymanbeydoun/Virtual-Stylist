@@ -7,7 +7,9 @@ Whoever's testing should then **open the output and confirm it's actually
 them** — not a generic generated person. That visual check is the only
 acceptance gate that catches identity drift.
 
-Cost: ~$0.06 + ~20s per garment rendered.
+Backend selected by env:
+  - MODAL_TRYON_ENDPOINT set in .env → FitDiT on Modal (~$0.005/garment)
+  - else → IDM-VTON on Replicate (~$0.06/garment)
 
 Run with:
   cd services/api && uv run scripts/smoke_tryon.py [email]
@@ -91,7 +93,10 @@ async def main() -> int:
     result_path = out_dir / "result.jpg"
     result_path.write_bytes(result.image_bytes)
 
-    print(f"\nDone. model_id={result.model_id}")
+    from app.config import get_settings
+    s = get_settings()
+    backend = "modal-fitdit" if s.modal_tryon_endpoint else "replicate-idm-vton"
+    print(f"\nDone. backend={backend} model_id={result.model_id}")
     print(f"  Input person : {person_path}")
     print(f"  Input garment: {garment_path}")
     print(f"  Try-on result: {result_path}")
