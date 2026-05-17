@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
@@ -135,14 +136,16 @@ export function BasePhotoScreen() {
           onPress={() => pick("camera")}
           disabled={upload.isPending}
         >
-          <Text style={styles.primaryText}>📷 Take a photo</Text>
+          <Ionicons name="camera-outline" size={18} color={palette.onAccent} />
+          <Text style={styles.primaryText}>Take a photo</Text>
         </Pressable>
         <Pressable
           style={styles.secondary}
           onPress={() => pick("library")}
           disabled={upload.isPending}
         >
-          <Text style={styles.secondaryText}>🖼  Choose from library</Text>
+          <Ionicons name="images-outline" size={18} color={palette.text} />
+          <Text style={styles.secondaryText}>Choose from library</Text>
         </Pressable>
 
         {upload.isPending && (
@@ -193,6 +196,9 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     marginTop: spacing(6),
     alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: spacing(2),
   },
   primaryText: { color: palette.onAccent, fontWeight: "700", fontSize: 16 },
   secondary: {
@@ -201,6 +207,9 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     marginTop: spacing(3),
     alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: spacing(2),
   },
   secondaryText: { color: palette.text, fontWeight: "600", fontSize: 16 },
   statusBox: {

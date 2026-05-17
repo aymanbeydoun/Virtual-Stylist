@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
@@ -90,10 +91,12 @@ export function AddItemScreen() {
         We&apos;ll remove the background, tag the category, color, and pattern for you.
       </Text>
       <Pressable style={styles.primary} onPress={() => pick("camera")} disabled={upload.isPending}>
-        <Text style={styles.primaryText}>📷 Take a photo</Text>
+        <Ionicons name="camera-outline" size={18} color={palette.onAccent} />
+        <Text style={styles.primaryText}>Take a photo</Text>
       </Pressable>
       <Pressable style={styles.secondary} onPress={() => pick("library")} disabled={upload.isPending}>
-        <Text style={styles.secondaryText}>🖼  Choose from library</Text>
+        <Ionicons name="images-outline" size={18} color={palette.text} />
+        <Text style={styles.secondaryText}>Choose from library</Text>
       </Pressable>
       {upload.isPending && (
         <View style={styles.statusBox}>
@@ -116,6 +119,9 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     marginBottom: spacing(3),
     alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: spacing(2),
   },
   primaryText: { color: palette.onAccent, fontWeight: "700", fontSize: 16 },
   secondary: {
@@ -123,6 +129,9 @@ const styles = StyleSheet.create({
     padding: spacing(4),
     borderRadius: radii.md,
     alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: spacing(2),
   },
   secondaryText: { color: palette.text, fontWeight: "600", fontSize: 16 },
   statusBox: {

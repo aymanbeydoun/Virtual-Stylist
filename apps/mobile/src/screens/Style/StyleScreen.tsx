@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useMutation } from "@tanstack/react-query";
@@ -145,9 +146,12 @@ export function StyleScreen() {
           {generate.isPending ? (
             <ActivityIndicator color={palette.onAccent} />
           ) : (
-            <Text style={styles.ctaText}>
-              {profile.isKidMode ? "Style my mission ✨" : "Style me"}
-            </Text>
+            <View style={styles.ctaRow}>
+              <Ionicons name="sparkles-outline" size={18} color={palette.onAccent} />
+              <Text style={styles.ctaText}>
+                {profile.isKidMode ? "Style my mission" : "Style me"}
+              </Text>
+            </View>
           )}
         </Pressable>
 
@@ -156,9 +160,12 @@ export function StyleScreen() {
         )}
 
         {generate.data?.weather && (
-          <Text style={styles.weather}>
-            🌤  {generate.data.weather.temp_c.toFixed(0)}°C · {generate.data.weather.condition}
-          </Text>
+          <View style={styles.weatherRow}>
+            <Ionicons name="partly-sunny-outline" size={16} color={palette.textMuted} />
+            <Text style={styles.weather}>
+              {generate.data.weather.temp_c.toFixed(0)}°C · {generate.data.weather.condition}
+            </Text>
+          </View>
         )}
 
         {outfits.length === 0 && generate.isSuccess && (
@@ -257,8 +264,15 @@ const styles = StyleSheet.create({
   },
   chipText: { color: palette.text },
   cta: { padding: spacing(4), borderRadius: radii.md, alignItems: "center", marginTop: spacing(8) },
+  ctaRow: { flexDirection: "row", alignItems: "center", gap: spacing(2) },
   ctaText: { color: palette.onAccent, fontWeight: "700", fontSize: 16 },
-  weather: { color: palette.textMuted, marginTop: spacing(5) },
+  weatherRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing(2),
+    marginTop: spacing(5),
+  },
+  weather: { color: palette.textMuted },
   outfit: {
     backgroundColor: palette.surface,
     padding: spacing(4),

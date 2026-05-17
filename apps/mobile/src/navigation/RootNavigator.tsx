@@ -1,6 +1,6 @@
+import { Ionicons } from "@expo/vector-icons";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { Text } from "react-native";
 
 import { useAuth } from "@/state/auth";
 import { useActiveProfile } from "@/state/profile";
@@ -31,44 +31,53 @@ export type RootStackParamList = {
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-function TabBarIcon({ label, focused }: { label: string; focused: boolean }) {
-  return (
-    <Text style={{ fontSize: 18, opacity: focused ? 1 : 0.5 }}>{label}</Text>
-  );
-}
+/**
+ * Tab icons use Ionicons — a single icon family for consistency, outlined
+ * when inactive and filled when active (iOS-native convention).
+ * All four icons are gender-neutral and minimal.
+ */
+type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
+
+const TAB_ICONS: Record<string, { outline: IoniconName; filled: IoniconName }> = {
+  Closet: { outline: "shirt-outline", filled: "shirt" },
+  Style: { outline: "sparkles-outline", filled: "sparkles" },
+  Family: { outline: "people-outline", filled: "people" },
+  You: { outline: "person-outline", filled: "person" },
+};
 
 function Tabs() {
   const isKidMode = useActiveProfile((s) => s.isKidMode);
   const activeColor = isKidMode ? palette.kidPrimary : palette.accent;
   return (
     <Tab.Navigator
-      screenOptions={{
+      screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: activeColor,
         tabBarInactiveTintColor: palette.textMuted,
-        tabBarStyle: { backgroundColor: palette.background, borderTopColor: palette.surfaceAlt },
-      }}
+        tabBarStyle: {
+          backgroundColor: palette.background,
+          borderTopColor: palette.surfaceAlt,
+          height: 84,
+          paddingTop: 8,
+        },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "600", letterSpacing: 0.3 },
+        tabBarIcon: ({ focused, color, size }) => {
+          const icons = TAB_ICONS[route.name];
+          if (!icons) return null;
+          return (
+            <Ionicons
+              name={focused ? icons.filled : icons.outline}
+              size={size ?? 24}
+              color={color}
+            />
+          );
+        },
+      })}
     >
-      <Tab.Screen
-        name="Closet"
-        component={ClosetScreen}
-        options={{ tabBarIcon: ({ focused }) => <TabBarIcon label="👚" focused={focused} /> }}
-      />
-      <Tab.Screen
-        name="Style"
-        component={StyleScreen}
-        options={{ tabBarIcon: ({ focused }) => <TabBarIcon label="✨" focused={focused} /> }}
-      />
-      <Tab.Screen
-        name="Family"
-        component={FamilyScreen}
-        options={{ tabBarIcon: ({ focused }) => <TabBarIcon label="👪" focused={focused} /> }}
-      />
-      <Tab.Screen
-        name="You"
-        component={YouScreen}
-        options={{ tabBarIcon: ({ focused }) => <TabBarIcon label="👤" focused={focused} /> }}
-      />
+      <Tab.Screen name="Closet" component={ClosetScreen} />
+      <Tab.Screen name="Style" component={StyleScreen} />
+      <Tab.Screen name="Family" component={FamilyScreen} />
+      <Tab.Screen name="You" component={YouScreen} />
     </Tab.Navigator>
   );
 }

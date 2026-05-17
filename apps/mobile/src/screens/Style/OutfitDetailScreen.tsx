@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -160,7 +161,10 @@ export function OutfitDetailScreen() {
                 {requestTryon.isPending ? (
                   <ActivityIndicator color={palette.onAccent} />
                 ) : (
-                  <Text style={styles.primaryText}>✨  Try on me</Text>
+                  <>
+                    <Ionicons name="sparkles-outline" size={18} color={palette.onAccent} />
+                    <Text style={styles.primaryText}>Try on me</Text>
+                  </>
                 )}
               </Pressable>
             </View>
@@ -244,13 +248,16 @@ export function OutfitDetailScreen() {
           style={[styles.button, styles.primary]}
           onPress={() => record.mutate("worn")}
         >
-          <Text style={styles.primaryText}>👕  Wore it today</Text>
+          <Ionicons name="checkmark-circle-outline" size={18} color={palette.onAccent} />
+          <Text style={styles.primaryText}>Wore it today</Text>
         </Pressable>
         <Pressable style={styles.button} onPress={() => record.mutate("saved")}>
-          <Text style={styles.buttonText}>⭐  Save for later</Text>
+          <Ionicons name="bookmark-outline" size={18} color={palette.text} />
+          <Text style={styles.buttonText}>Save for later</Text>
         </Pressable>
         <Pressable style={styles.button} onPress={() => record.mutate("skipped")}>
-          <Text style={styles.buttonText}>👎  Not for me</Text>
+          <Ionicons name="close-circle-outline" size={18} color={palette.text} />
+          <Text style={styles.buttonText}>Not for me</Text>
         </Pressable>
       </ScrollView>
 
@@ -399,6 +406,9 @@ const styles = StyleSheet.create({
     padding: spacing(4),
     borderRadius: radii.md,
     alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: spacing(2),
     marginBottom: spacing(3),
   },
   buttonText: { color: palette.text, fontWeight: "600", fontSize: 16 },
