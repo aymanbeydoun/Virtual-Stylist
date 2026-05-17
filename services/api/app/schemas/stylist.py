@@ -11,6 +11,7 @@ from app.schemas.wardrobe import WardrobeItemOut
 Destination = Literal[
     "office", "date", "brunch", "gym", "playground", "school",
     "travel", "formal_event", "casual", "mall",
+    "wedding", "restaurant", "beach", "park", "religious",
 ]
 Mood = Literal["confident", "cozy", "edgy", "playful", "minimal", "romantic"]
 # Aesthetic / style preference — orthogonal to mood (emotional state). Mood is

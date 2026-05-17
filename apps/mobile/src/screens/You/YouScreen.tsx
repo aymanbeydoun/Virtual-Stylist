@@ -4,11 +4,23 @@ import { useQuery } from "@tanstack/react-query";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { preferencesApi } from "@/api/preferences";
 import { tryonApi } from "@/api/tryon";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useAuth } from "@/state/auth";
 import { useActiveProfile } from "@/state/profile";
 import { palette, radii, spacing } from "@/theme";
+
+const STYLE_LABELS: Record<string, string> = {
+  streetwear: "Streetwear",
+  minimal: "Minimal",
+  classic: "Classic",
+  smart_casual: "Smart casual",
+  preppy: "Preppy",
+  athleisure: "Athleisure",
+  bohemian: "Bohemian",
+  avant_garde: "Avant-garde",
+};
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -24,6 +36,11 @@ export function YouScreen() {
     queryFn: () => tryonApi.getBasePhoto(owner),
   });
   const hasBasePhoto = !!basePhoto.data?.base_photo_key;
+  const stylePref = useQuery({
+    queryKey: ["stylePreference", profile.ownerKind, profile.ownerId],
+    queryFn: () => preferencesApi.getStyle(owner),
+  });
+  const currentStyle = stylePref.data?.preferred_style ?? null;
 
   return (
     <SafeAreaView style={styles.root}>
@@ -41,6 +58,23 @@ export function YouScreen() {
               {hasBasePhoto
                 ? "Tap to update. We use this to render you in every outfit."
                 : "One full-body photo unlocks the 'Try on me' button on every outfit."}
+            </Text>
+          </View>
+          <Text style={styles.arrow}>›</Text>
+        </Pressable>
+
+        <Pressable style={styles.tryonCard} onPress={() => nav.navigate("StylePreference")}>
+          <View style={[styles.tryonDot, currentStyle && { backgroundColor: "#7ce4a3" }]} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.tryonTitle}>
+              {currentStyle
+                ? `Default style · ${STYLE_LABELS[currentStyle] ?? currentStyle}`
+                : "Set a default style"}
+            </Text>
+            <Text style={styles.tryonBody}>
+              {currentStyle
+                ? "Applied to every outfit unless you override on the Style tab."
+                : "Pick a style aesthetic the AI applies by default."}
             </Text>
           </View>
           <Text style={styles.arrow}>›</Text>

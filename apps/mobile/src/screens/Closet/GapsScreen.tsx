@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Image } from "expo-image";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -102,31 +104,75 @@ export function GapsScreen() {
           data={data}
           keyExtractor={(g) => g.id}
           contentContainerStyle={{ padding: spacing(4), gap: spacing(3) }}
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View
-                  style={[styles.sevPill, { backgroundColor: SEVERITY_COLOR[item.severity] }]}
-                >
-                  <Text style={styles.sevText}>{SEVERITY_LABEL[item.severity]}</Text>
-                </View>
-                <Text style={styles.slot}>{item.slot.toUpperCase()}</Text>
-              </View>
-              <Text style={styles.cardTitle}>{item.title}</Text>
-              {item.rationale && <Text style={styles.cardRationale}>{item.rationale}</Text>}
-              <View style={styles.cardActions}>
-                <Pressable
-                  style={styles.actionGhost}
-                  onPress={() => dismiss.mutate(item.id)}
-                >
-                  <Text style={styles.actionGhostText}>Not relevant</Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
+          renderItem={({ item }) => <GapCard gap={item} onDismiss={() => dismiss.mutate(item.id)} />}
         />
       )}
     </SafeAreaView>
+  );
+}
+
+function GapCard({ gap, onDismiss }: { gap: GapFinding; onDismiss: () => void }) {
+  const suggestions = useQuery({
+    queryKey: ["gapSuggestions", gap.id],
+    queryFn: () => gapsApi.suggestions(gap.id),
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const click = useMutation({
+    mutationFn: (id: string) => gapsApi.clickSuggestion(id),
+    onSuccess: (resp) => {
+      Linking.openURL(resp.url).catch((e) =>
+        Alert.alert("Couldn't open link", e instanceof Error ? e.message : "Try again."),
+      );
+    },
+  });
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <View style={[styles.sevPill, { backgroundColor: SEVERITY_COLOR[gap.severity] }]}>
+          <Text style={styles.sevText}>{SEVERITY_LABEL[gap.severity]}</Text>
+        </View>
+        <Text style={styles.slot}>{gap.slot.toUpperCase()}</Text>
+      </View>
+      <Text style={styles.cardTitle}>{gap.title}</Text>
+      {gap.rationale && <Text style={styles.cardRationale}>{gap.rationale}</Text>}
+
+      {suggestions.data && suggestions.data.length > 0 && (
+        <View style={styles.suggestions}>
+          <Text style={styles.suggestionsLabel}>Shop the look</Text>
+          {suggestions.data.map((s) => (
+            <Pressable
+              key={s.id}
+              style={styles.suggestionRow}
+              onPress={() => click.mutate(s.id)}
+            >
+              {s.image_url ? (
+                <Image source={{ uri: s.image_url }} style={styles.suggestionThumb} contentFit="cover" />
+              ) : (
+                <View style={[styles.suggestionThumb, { backgroundColor: palette.surfaceAlt }]} />
+              )}
+              <View style={{ flex: 1 }}>
+                {s.brand && <Text style={styles.suggestionBrand}>{s.brand.toUpperCase()}</Text>}
+                <Text style={styles.suggestionTitle} numberOfLines={2}>{s.title}</Text>
+                {s.price_minor != null && s.price_currency && (
+                  <Text style={styles.suggestionPrice}>
+                    {s.price_currency} {(s.price_minor / 100).toFixed(0)}
+                  </Text>
+                )}
+              </View>
+              <Text style={styles.suggestionArrow}>›</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      <View style={styles.cardActions}>
+        <Pressable style={styles.actionGhost} onPress={onDismiss}>
+          <Text style={styles.actionGhostText}>Not relevant</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -173,4 +219,36 @@ const styles = StyleSheet.create({
   cardActions: { flexDirection: "row", marginTop: spacing(2) },
   actionGhost: { paddingVertical: spacing(2), paddingHorizontal: spacing(3) },
   actionGhostText: { color: palette.textMuted, fontWeight: "600" },
+  suggestions: {
+    marginTop: spacing(3),
+    paddingTop: spacing(3),
+    borderTopWidth: 1,
+    borderTopColor: palette.surfaceAlt,
+    gap: spacing(2),
+  },
+  suggestionsLabel: {
+    color: palette.textMuted,
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    marginBottom: spacing(1),
+  },
+  suggestionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: palette.background,
+    padding: spacing(2),
+    borderRadius: radii.sm,
+    gap: spacing(3),
+  },
+  suggestionThumb: { width: 56, height: 56, borderRadius: radii.sm },
+  suggestionBrand: {
+    color: palette.textMuted,
+    fontSize: 10,
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  suggestionTitle: { color: palette.text, fontSize: 13, fontWeight: "500" },
+  suggestionPrice: { color: palette.accentDark, fontSize: 13, fontWeight: "600", marginTop: 2 },
+  suggestionArrow: { color: palette.textMuted, fontSize: 24, fontWeight: "300" },
 });

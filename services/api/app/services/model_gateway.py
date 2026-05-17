@@ -337,8 +337,12 @@ Compose 2-3 complete outfits. Hard rules:
 - Never repeat the same item across outfits.
 - Respect the weather (temp_c, condition). Cold/rain → outerwear, never sandals.
 - Match formality to destination:
-  office=6-8, date=6-9, brunch=3-7, formal_event=8-10, casual=1-6, school=1-5,
-  playground=0-4, gym=0-3, travel=2-6, mall=2-7 (smart-casual is the UAE default).
+  office=5-9, formal_event=8-10, wedding=7-10 (guest attire, never under-dress),
+  restaurant=4-8 (UAE skews dressier — Zuma, COYA, Atlantis-level by default),
+  date=4-8, religious=5-9 (modest + formal-leaning; cover shoulders/knees,
+  prefer long sleeves), brunch=3-7, mall=2-7 (smart-casual UAE default),
+  casual=1-6, school=1-5, park=1-4, playground=0-4, beach=0-3 (cover-ups +
+  sandals; no shoes that ruin in sand), gym=0-3, travel=2-6.
 - Include accessories (jewelry/belt/hat/bag) when they elevate the look.
 
 Output ONLY this JSON, no markdown:

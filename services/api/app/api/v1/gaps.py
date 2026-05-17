@@ -8,10 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import CurrentUser
 from app.db import get_db
+from app.models.affiliate import AffiliateClick, AffiliateSuggestion
 from app.models.family import FamilyMember
 from app.models.gaps import GapFinding, GapStatus
 from app.models.users import OwnerKind
+from app.schemas.affiliate import AffiliateSuggestionOut
 from app.schemas.gaps import GapAnalyseRequest, GapFindingOut
+from app.services.affiliate import suggestions_for_gap
 from app.services.gap_analysis import analyse_wardrobe, dismiss
 
 router = APIRouter()
@@ -89,3 +92,55 @@ async def dismiss_gap(
     if not ok:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no open gap with that id")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{gap_id}/suggestions", response_model=list[AffiliateSuggestionOut])
+async def list_suggestions(
+    gap_id: Annotated[uuid.UUID, Path()],
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[AffiliateSuggestion]:
+    """Return affiliate product suggestions for a gap. Lazy-fetches from the
+    configured provider on first call; cached on the row thereafter.
+    """
+    gap = (
+        await db.execute(select(GapFinding).where(GapFinding.id == gap_id))
+    ).scalar_one_or_none()
+    if not gap:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    # Authorise.
+    await _resolve_owner(db, user.id, gap.owner_kind, gap.owner_id)
+    return await suggestions_for_gap(db, gap=gap)
+
+
+@router.post(
+    "/suggestions/{suggestion_id}/click",
+    status_code=status.HTTP_200_OK,
+)
+async def record_click(
+    suggestion_id: Annotated[uuid.UUID, Path()],
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, str]:
+    """Record a click + return the affiliate URL the mobile should open.
+
+    Keeping the redirect server-side means we always log the click and can
+    rotate signing keys / providers without touching the client.
+    """
+    s = (
+        await db.execute(
+            select(AffiliateSuggestion).where(AffiliateSuggestion.id == suggestion_id)
+        )
+    ).scalar_one_or_none()
+    if not s:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    # Light authorisation — verify the gap this suggestion belongs to is owned
+    # by the requesting user.
+    gap = (
+        await db.execute(select(GapFinding).where(GapFinding.id == s.gap_finding_id))
+    ).scalar_one()
+    await _resolve_owner(db, user.id, gap.owner_kind, gap.owner_id)
+
+    db.add(AffiliateClick(suggestion_id=s.id, user_id=user.id))
+    await db.commit()
+    return {"url": s.affiliate_url}

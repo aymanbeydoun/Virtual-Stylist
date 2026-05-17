@@ -1,3 +1,4 @@
+from app.models.affiliate import AffiliateClick, AffiliateProviderKind, AffiliateSuggestion
 from app.models.base import Base
 from app.models.conversations import MessageRole, OutfitMessage
 from app.models.family import FamilyMember, KidConsent
@@ -8,6 +9,9 @@ from app.models.users import StyleProfile, User
 from app.models.wardrobe import ItemCorrection, WardrobeItem
 
 __all__ = [
+    "AffiliateClick",
+    "AffiliateProviderKind",
+    "AffiliateSuggestion",
     "Base",
     "FamilyMember",
     "GapFinding",

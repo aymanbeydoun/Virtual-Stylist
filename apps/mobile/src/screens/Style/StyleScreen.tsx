@@ -21,8 +21,13 @@ const ADULT_DESTINATIONS: { id: Destination; label: string }[] = [
   { id: "office", label: "Office" },
   { id: "mall", label: "Mall" },
   { id: "date", label: "Date" },
+  { id: "restaurant", label: "Restaurant" },
   { id: "brunch", label: "Brunch" },
+  { id: "wedding", label: "Wedding" },
+  { id: "religious", label: "Religious" },
   { id: "casual", label: "Casual" },
+  { id: "park", label: "Park" },
+  { id: "beach", label: "Beach" },
   { id: "gym", label: "Gym" },
   { id: "travel", label: "Travel" },
   { id: "formal_event", label: "Formal" },
@@ -31,6 +36,8 @@ const ADULT_DESTINATIONS: { id: Destination; label: string }[] = [
 const KID_DESTINATIONS: { id: Destination; label: string }[] = [
   { id: "school", label: "School" },
   { id: "playground", label: "Playground" },
+  { id: "park", label: "Park" },
+  { id: "beach", label: "Beach" },
   { id: "mall", label: "Mall" },
   { id: "casual", label: "Just hanging out" },
 ];

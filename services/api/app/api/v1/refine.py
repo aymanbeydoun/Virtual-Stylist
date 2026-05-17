@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.auth import CurrentUser
-from app.db import get_db
+from app.db import SessionLocal, get_db
 from app.models.conversations import MessageRole, OutfitMessage
 from app.models.family import FamilyMember
 from app.models.outfits import Outfit, OutfitItem, OutfitSlot
@@ -179,18 +179,26 @@ async def refine_outfit(
             except (ValueError, KeyError):
                 continue
 
+    items_actually_changed = False
     if revised_items:
+        old_ids = {oi.item_id for oi in outfit.items}
+        new_ids = {oi.item_id for oi in revised_items}
+        items_actually_changed = old_ids != new_ids
+
         # Replace items atomically: delete old joins, add new.
         for oi in list(outfit.items):
             outfit.items.remove(oi)
         for oi in revised_items:
             outfit.items.append(oi)
 
-        # Mark composite + tryon stale (mobile will re-render on next view).
-        outfit.composite_image_key = None
         outfit.rationale = result.rationale or outfit.rationale
         if result.style:
             outfit.style = result.style
+
+        if items_actually_changed:
+            # The flat-lay PNG is now stale. Mark null + enqueue a recompose so
+            # the mobile picks up the new image on its next refetch.
+            outfit.composite_image_key = None
 
     # Persist the assistant reply.
     assistant_msg = OutfitMessage(
@@ -204,7 +212,55 @@ async def refine_outfit(
     await db.refresh(outfit, attribute_names=["items"])
     await db.refresh(assistant_msg)
 
+    # Post-commit side effects: re-render the composite + drop any cached
+    # tryons so the user is prompted to re-render once the items changed.
+    if items_actually_changed:
+        await _enqueue_after_refine(outfit_id)
+
     return RefineResponse(
         outfit=_outfit_to_response(outfit, items_by_id),
         message=MessageOut.model_validate(assistant_msg),
     )
+
+
+async def _enqueue_after_refine(outfit_id: uuid.UUID) -> None:
+    """Re-render the composite + mark existing tryons stale.
+
+    The composite reads from each item's cutout — same flow as the initial
+    generation. The previous tryon used the old item set, so we delete the
+    rendered_image_key but keep the row (history). The mobile shows a fresh
+    'Try on me' CTA on next view.
+    """
+    from app.config import get_settings
+    from app.models.tryons import OutfitTryon, TryonStatus
+    from app.services.outfit_compositor import compose_outfit_image
+
+    settings = get_settings()
+    # Mark existing ready tryons stale so the mobile re-renders.
+    async with SessionLocal() as db2:
+        rows = (
+            await db2.execute(
+                select(OutfitTryon).where(
+                    OutfitTryon.outfit_id == outfit_id,
+                    OutfitTryon.status == TryonStatus.ready,
+                )
+            )
+        ).scalars().all()
+        for t in rows:
+            t.rendered_image_key = None
+            t.status = TryonStatus.failed
+            t.error_message = "stale: outfit changed via refinement"
+        await db2.commit()
+
+    if settings.ingest_inline:
+        await compose_outfit_image({}, str(outfit_id))
+        return
+    try:
+        from arq import create_pool
+        from arq.connections import RedisSettings
+
+        redis = await create_pool(RedisSettings.from_dsn(settings.redis_url))
+        await redis.enqueue_job("compose_outfit_image", str(outfit_id))
+        await redis.aclose()
+    except Exception:
+        await compose_outfit_image({}, str(outfit_id))

@@ -49,15 +49,19 @@ _CATEGORY_TO_SLOT = {
 _DESTINATION_FORMALITY = {
     "office": (5, 9),
     "formal_event": (8, 10),
+    "wedding": (7, 10),  # guest attire — never under-dress
+    "restaurant": (4, 8),  # nicer dining — UAE skews dressier
     "date": (4, 8),
+    "religious": (5, 9),  # modest + formal-leaning by default
     "brunch": (3, 7),
+    "mall": (2, 7),
     "casual": (1, 6),
     "school": (1, 5),
+    "park": (1, 4),
     "playground": (0, 4),
+    "beach": (0, 3),
     "gym": (0, 3),
     "travel": (2, 6),
-    # UAE-specific: mall trips skew smart-casual but cover a wide range.
-    "mall": (2, 7),
 }
 
 
