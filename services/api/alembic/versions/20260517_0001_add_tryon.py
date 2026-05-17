@@ -7,8 +7,9 @@ without rewriting the outfit row).
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "20260517_0001_tryon"
 down_revision: str | None = "d10619eaa951"

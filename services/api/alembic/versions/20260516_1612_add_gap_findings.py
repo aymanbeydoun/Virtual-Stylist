@@ -6,8 +6,9 @@ Affiliate suggestions land in a follow-up migration (Phase 4).
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "d10619eaa951"
 down_revision: str | None = "0001_initial"
@@ -21,8 +22,12 @@ def upgrade() -> None:
     bind = op.get_bind()
     # Create the new gap_* enums up-front, then use create_type=False on the column
     # types so create_table doesn't try to redeclare them.
-    postgresql.ENUM("high", "medium", "low", name="gap_severity").create(bind, checkfirst=True)
-    postgresql.ENUM("open", "dismissed", "resolved", name="gap_status").create(bind, checkfirst=True)
+    postgresql.ENUM("high", "medium", "low", name="gap_severity").create(
+        bind, checkfirst=True
+    )
+    postgresql.ENUM("open", "dismissed", "resolved", name="gap_status").create(
+        bind, checkfirst=True
+    )
     owner_kind = postgresql.ENUM(
         "user", "family_member", name="owner_kind", create_type=False
     )

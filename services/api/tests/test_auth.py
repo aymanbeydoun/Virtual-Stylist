@@ -17,9 +17,9 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import HTTPException
 from jose import jwt
 
+from app.config import get_settings
 from app.core import auth
 from app.core.auth import _user_from_claims, _verify_jwt
-from app.config import get_settings
 
 
 def _make_jwks() -> tuple[rsa.RSAPrivateKey, dict[str, Any]]:
