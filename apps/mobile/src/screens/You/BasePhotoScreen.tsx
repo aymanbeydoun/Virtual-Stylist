@@ -7,6 +7,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { tryonApi } from "@/api/tryon";
+import { wardrobeApi } from "@/api/wardrobe";
 import { useActiveProfile } from "@/state/profile";
 import { palette, radii, spacing } from "@/theme";
 
@@ -31,15 +32,9 @@ export function BasePhotoScreen() {
       const signed = await tryonApi.createBasePhotoUploadUrl("image/jpeg", owner);
 
       setStatus("Uploading photo…");
-      const fileResp = await fetch(uri);
-      const blob = await fileResp.blob();
-      const target = signed.upload_url.startsWith("http")
-        ? signed.upload_url
-        : `${baseUrl}${signed.upload_url}`;
-      const formData = new FormData();
-      formData.append("file", blob as unknown as Blob, "base.jpg");
-      const r = await fetch(target, { method: "PUT", body: formData });
-      if (!r.ok) throw new Error(`upload failed: ${r.status}`);
+      // Same upload helper as wardrobe — handles file:// URIs without the
+      // flaky fetch+blob dance that fails on iOS Simulator photo picker URIs.
+      await wardrobeApi.uploadFileUri(signed.upload_url, uri, "image/jpeg");
 
       setStatus("Saving…");
       return tryonApi.commitBasePhoto(signed.object_key, owner);
@@ -52,28 +47,45 @@ export function BasePhotoScreen() {
     onError: (err) => setStatus(`Failed: ${(err as Error).message}`),
   });
 
-  const pick = async (source: "camera" | "library") => {
-    const perm =
-      source === "camera"
-        ? await ImagePicker.requestCameraPermissionsAsync()
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      setStatus("Permission denied");
-      return;
-    }
-    const result =
-      source === "camera"
-        ? await ImagePicker.launchCameraAsync({
-            quality: 0.85,
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          })
-        : await ImagePicker.launchImageLibraryAsync({
-            quality: 0.85,
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          });
-    if (result.canceled) return;
-    const asset = result.assets[0];
-    if (asset) upload.mutate(asset.uri);
+  const pick = (source: "camera" | "library") => {
+    void (async () => {
+      try {
+        const perm =
+          source === "camera"
+            ? await ImagePicker.requestCameraPermissionsAsync()
+            : await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          setStatus(
+            source === "camera"
+              ? "Camera access denied. Enable it in Settings."
+              : "Photo library access denied.",
+          );
+          return;
+        }
+        const result =
+          source === "camera"
+            ? await ImagePicker.launchCameraAsync({
+                quality: 0.85,
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              })
+            : await ImagePicker.launchImageLibraryAsync({
+                quality: 0.85,
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              });
+        if (result.canceled) return;
+        const asset = result.assets[0];
+        if (asset) upload.mutate(asset.uri);
+      } catch (e) {
+        const m = e instanceof Error ? e.message : String(e);
+        if (source === "camera" && /no.*camera|unavailable|simulator/i.test(m)) {
+          setStatus(
+            "The iOS Simulator doesn't have a camera. Use 'Choose from library' instead.",
+          );
+        } else {
+          setStatus(`Couldn't open ${source}: ${m}`);
+        }
+      }
+    })();
   };
 
   const existingKey = current.data?.base_photo_key;

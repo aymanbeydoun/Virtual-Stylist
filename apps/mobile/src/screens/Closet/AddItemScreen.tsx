@@ -21,9 +21,7 @@ export function AddItemScreen() {
       const signed = await wardrobeApi.createUploadUrl("image/jpeg", owner);
 
       setStatus("Uploading photo…");
-      const fileResp = await fetch(uri);
-      const blob = await fileResp.blob();
-      await wardrobeApi.uploadBytes(signed.upload_url, blob, "image/jpeg");
+      await wardrobeApi.uploadFileUri(signed.upload_url, uri, "image/jpeg");
 
       setStatus("Tagging with AI…");
       return wardrobeApi.createItem(signed.object_key, owner);
@@ -36,22 +34,46 @@ export function AddItemScreen() {
     onError: (err) => setStatus(`Failed: ${(err as Error).message}`),
   });
 
-  const pick = async (source: "camera" | "library") => {
-    const perm =
-      source === "camera"
-        ? await ImagePicker.requestCameraPermissionsAsync()
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      setStatus("Permission denied");
-      return;
-    }
-    const result =
-      source === "camera"
-        ? await ImagePicker.launchCameraAsync({ quality: 0.7, mediaTypes: ImagePicker.MediaTypeOptions.Images })
-        : await ImagePicker.launchImageLibraryAsync({ quality: 0.7, mediaTypes: ImagePicker.MediaTypeOptions.Images });
-    if (result.canceled) return;
-    const asset = result.assets[0];
-    if (asset) upload.mutate(asset.uri);
+  const pick = (source: "camera" | "library") => {
+    // Voided so Pressable's onPress doesn't await — any error inside is caught
+    // and surfaced via setStatus, never bubbling as an unhandled promise.
+    void (async () => {
+      try {
+        const perm =
+          source === "camera"
+            ? await ImagePicker.requestCameraPermissionsAsync()
+            : await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          setStatus(
+            source === "camera"
+              ? "Camera access denied. Enable it in Settings → Virtual Stylist."
+              : "Photo library access denied.",
+          );
+          return;
+        }
+        const result =
+          source === "camera"
+            ? await ImagePicker.launchCameraAsync({
+                quality: 0.7,
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              })
+            : await ImagePicker.launchImageLibraryAsync({
+                quality: 0.7,
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              });
+        if (result.canceled) return;
+        const asset = result.assets[0];
+        if (asset) upload.mutate(asset.uri);
+      } catch (e) {
+        const m = e instanceof Error ? e.message : String(e);
+        // iOS Simulator has no real camera — launchCameraAsync throws.
+        if (source === "camera" && /no.*camera|unavailable|simulator/i.test(m)) {
+          setStatus("The iOS Simulator doesn't have a camera. Use 'Choose from library' instead.");
+        } else {
+          setStatus(`Couldn't open ${source}: ${m}`);
+        }
+      }
+    })();
   };
 
   return (
