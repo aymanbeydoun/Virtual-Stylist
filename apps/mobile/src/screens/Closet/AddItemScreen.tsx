@@ -2,11 +2,12 @@ import { useNavigation } from "@react-navigation/native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { wardrobeApi } from "@/api/wardrobe";
 import { useActiveProfile } from "@/state/profile";
 import { palette, radii, spacing } from "@/theme";
+import { isIosSimulator } from "@/utils/device";
 
 export function AddItemScreen() {
   const nav = useNavigation();
@@ -35,8 +36,20 @@ export function AddItemScreen() {
   });
 
   const pick = (source: "camera" | "library") => {
+    // Pre-check: the iOS Simulator has no camera, and launchCameraAsync's
+    // behaviour there is inconsistent — sometimes it returns `canceled` with
+    // no error (looks like "nothing happens"), sometimes throws. Short-circuit
+    // with a visible Alert before we even try.
+    if (source === "camera" && isIosSimulator()) {
+      Alert.alert(
+        "Camera not available in Simulator",
+        "Use 'Choose from library' to pick a sample photo, or run the app on your iPhone via Expo Go to use the real camera.",
+      );
+      return;
+    }
+
     // Voided so Pressable's onPress doesn't await — any error inside is caught
-    // and surfaced via setStatus, never bubbling as an unhandled promise.
+    // and surfaced via Alert, never bubbling as an unhandled promise.
     void (async () => {
       try {
         const perm =
@@ -44,10 +57,9 @@ export function AddItemScreen() {
             ? await ImagePicker.requestCameraPermissionsAsync()
             : await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!perm.granted) {
-          setStatus(
-            source === "camera"
-              ? "Camera access denied. Enable it in Settings → Virtual Stylist."
-              : "Photo library access denied.",
+          Alert.alert(
+            source === "camera" ? "Camera access denied" : "Photo library access denied",
+            "Enable it in iOS Settings → Virtual Stylist.",
           );
           return;
         }
@@ -66,12 +78,7 @@ export function AddItemScreen() {
         if (asset) upload.mutate(asset.uri);
       } catch (e) {
         const m = e instanceof Error ? e.message : String(e);
-        // iOS Simulator has no real camera — launchCameraAsync throws.
-        if (source === "camera" && /no.*camera|unavailable|simulator/i.test(m)) {
-          setStatus("The iOS Simulator doesn't have a camera. Use 'Choose from library' instead.");
-        } else {
-          setStatus(`Couldn't open ${source}: ${m}`);
-        }
+        Alert.alert(`Couldn't open ${source}`, m);
       }
     })();
   };

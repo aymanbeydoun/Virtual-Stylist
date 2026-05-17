@@ -3,13 +3,22 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { tryonApi } from "@/api/tryon";
 import { wardrobeApi } from "@/api/wardrobe";
 import { useActiveProfile } from "@/state/profile";
 import { palette, radii, spacing } from "@/theme";
+import { isIosSimulator } from "@/utils/device";
 
 const baseUrl = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -48,6 +57,13 @@ export function BasePhotoScreen() {
   });
 
   const pick = (source: "camera" | "library") => {
+    if (source === "camera" && isIosSimulator()) {
+      Alert.alert(
+        "Camera not available in Simulator",
+        "Use 'Choose from library' to pick a sample photo, or run the app on your iPhone via Expo Go to use the real camera.",
+      );
+      return;
+    }
     void (async () => {
       try {
         const perm =
@@ -55,10 +71,9 @@ export function BasePhotoScreen() {
             ? await ImagePicker.requestCameraPermissionsAsync()
             : await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!perm.granted) {
-          setStatus(
-            source === "camera"
-              ? "Camera access denied. Enable it in Settings."
-              : "Photo library access denied.",
+          Alert.alert(
+            source === "camera" ? "Camera access denied" : "Photo library access denied",
+            "Enable it in iOS Settings → Virtual Stylist.",
           );
           return;
         }
@@ -77,13 +92,7 @@ export function BasePhotoScreen() {
         if (asset) upload.mutate(asset.uri);
       } catch (e) {
         const m = e instanceof Error ? e.message : String(e);
-        if (source === "camera" && /no.*camera|unavailable|simulator/i.test(m)) {
-          setStatus(
-            "The iOS Simulator doesn't have a camera. Use 'Choose from library' instead.",
-          );
-        } else {
-          setStatus(`Couldn't open ${source}: ${m}`);
-        }
+        Alert.alert(`Couldn't open ${source}`, m);
       }
     })();
   };
