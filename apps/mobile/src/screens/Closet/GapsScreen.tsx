@@ -78,7 +78,7 @@ export function GapsScreen() {
         disabled={runAnalysis.isPending}
       >
         {runAnalysis.isPending ? (
-          <ActivityIndicator color={palette.background} />
+          <ActivityIndicator color={palette.onAccent} />
         ) : (
           <Text style={styles.analyseButtonText}>
             {data.length > 0 ? "Refresh analysis" : "Analyse my closet"}
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   analyseButtonBusy: { opacity: 0.6 },
-  analyseButtonText: { color: palette.background, fontWeight: "700", fontSize: 16 },
+  analyseButtonText: { color: palette.onAccent, fontWeight: "700", fontSize: 16 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing(6) },
   emptyTitle: { color: palette.text, fontSize: 18, fontWeight: "600", marginBottom: spacing(2) },
   emptyText: { color: palette.textMuted, textAlign: "center", lineHeight: 20 },

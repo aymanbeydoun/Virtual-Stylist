@@ -46,6 +46,16 @@ export type Destination =
 
 export type Mood = "confident" | "cozy" | "edgy" | "playful" | "minimal" | "romantic";
 
+export type Style =
+  | "streetwear"
+  | "minimal"
+  | "classic"
+  | "preppy"
+  | "bohemian"
+  | "athleisure"
+  | "avant_garde"
+  | "smart_casual";
+
 export interface Outfit {
   id: string;
   destination: string | null;

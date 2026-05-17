@@ -105,5 +105,5 @@ const styles = StyleSheet.create({
   },
   button: { backgroundColor: palette.accent, padding: spacing(3), borderRadius: radii.md, alignItems: "center" },
   buttonDisabled: { opacity: 0.4 },
-  buttonText: { color: palette.background, fontWeight: "700" },
+  buttonText: { color: palette.onAccent, fontWeight: "700" },
 });

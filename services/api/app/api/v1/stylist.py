@@ -52,6 +52,7 @@ def _outfit_to_response(outfit: Outfit, items_by_id: dict[uuid.UUID, object]) ->
         id=outfit.id,
         destination=outfit.destination,
         mood=outfit.mood,
+        style=outfit.style,
         rationale=outfit.rationale,
         confidence=outfit.confidence,
         composite_image_key=outfit.composite_image_key,
@@ -85,6 +86,7 @@ async def generate(
         owner_id=owner_id,
         destination=body.destination,
         mood=body.mood,
+        style=body.style,
         notes=body.notes,
         kid_mode=kid_mode,
     )
@@ -100,6 +102,43 @@ async def generate(
     return GenerateOutfitResponse(
         outfits=[_outfit_to_response(o, items_map) for o in outfits], weather=weather
     )
+
+
+@router.get("/outfits/{outfit_id}", response_model=OutfitOut)
+async def get_outfit(
+    outfit_id: uuid.UUID,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OutfitOut:
+    from sqlalchemy.orm import selectinload
+
+    outfit = (
+        await db.execute(
+            select(Outfit).where(Outfit.id == outfit_id).options(selectinload(Outfit.items))
+        )
+    ).scalar_one_or_none()
+    if not outfit:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    if outfit.owner_kind == OwnerKind.user and outfit.owner_id != user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN)
+    if outfit.owner_kind == OwnerKind.family_member:
+        member = (
+            await db.execute(
+                select(FamilyMember).where(
+                    FamilyMember.id == outfit.owner_id, FamilyMember.guardian_id == user.id
+                )
+            )
+        ).scalar_one_or_none()
+        if not member:
+            raise HTTPException(status.HTTP_403_FORBIDDEN)
+    item_ids = {oi.item_id for oi in outfit.items}
+    items_map: dict[uuid.UUID, object] = {}
+    if item_ids:
+        rows = (
+            await db.execute(select(WardrobeItem).where(WardrobeItem.id.in_(item_ids)))
+        ).scalars().all()
+        items_map = {r.id: r for r in rows}
+    return _outfit_to_response(outfit, items_map)
 
 
 @router.post("/outfits/{outfit_id}/events", status_code=status.HTTP_201_CREATED)

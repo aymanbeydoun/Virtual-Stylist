@@ -61,6 +61,17 @@ class GapAnalysisResult:
 
 
 @dataclass
+class RefineResult:
+    """Output of a one-turn refinement: the revised outfit + a chat reply."""
+
+    items: list[dict[str, Any]]  # [{"item_id": "...", "slot": "..."}]
+    rationale: str | None
+    style: str | None
+    message: str  # natural-language reply shown in the chat thread
+    model_id: str
+
+
+@dataclass
 class TryonInput:
     """One garment image + its slot label, so the prompt can name what it is."""
 
@@ -87,6 +98,7 @@ class ModelGateway(Protocol):
         weather: WeatherSnapshot | None,
         notes: str | None,
         kid_mode: bool,
+        style: str | None = None,
     ) -> StylistResult: ...
     async def analyze_gaps(
         self,
@@ -100,6 +112,18 @@ class ModelGateway(Protocol):
         person_image: bytes,
         garments: list[TryonInput],
     ) -> TryonResult: ...
+    async def refine_outfit(
+        self,
+        *,
+        current_items: list[dict[str, Any]],
+        candidates: list[dict[str, Any]],
+        history: list[dict[str, str]],  # [{"role": "user|assistant", "content": "..."}]
+        user_message: str,
+        destination: str | None,
+        mood: str | None,
+        style: str | None,
+        kid_mode: bool,
+    ) -> RefineResult: ...
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +177,9 @@ class StubGateway:
         weather: WeatherSnapshot | None,
         notes: str | None,
         kid_mode: bool,
+        style: str | None = None,
     ) -> StylistResult:
+        del style  # stub ignores style — production gateway honours it
         by_slot: dict[str, list[dict[str, Any]]] = {}
         for c in candidates:
             by_slot.setdefault(c["slot"], []).append(c)
@@ -222,6 +248,27 @@ class StubGateway:
         # in offline dev without spending Replicate credits.
         return TryonResult(image_bytes=person_image, model_id="stub-tryon-v0")
 
+    async def refine_outfit(
+        self,
+        *,
+        current_items: list[dict[str, Any]],
+        candidates: list[dict[str, Any]],
+        history: list[dict[str, str]],
+        user_message: str,
+        destination: str | None,
+        mood: str | None,
+        style: str | None,
+        kid_mode: bool,
+    ) -> RefineResult:
+        del history, destination, mood, kid_mode  # stub ignores
+        return RefineResult(
+            items=current_items,
+            rationale="(stub) outfit unchanged",
+            style=style,
+            message=f"(stub) ack: {user_message[:80]}",
+            model_id="stub-refine-v0",
+        )
+
 
 # ---------------------------------------------------------------------------
 # Production gateway — Replicate + Anthropic
@@ -261,9 +308,21 @@ Rules:
 _STYLIST_SYSTEM = """\
 You are a professional personal stylist working from the user's actual wardrobe.
 
-You receive a JSON payload with: destination, mood, weather, notes, kid_mode, and a list \
-of `candidates`. Each candidate has: id, slot (top|bottom|dress|shoes|outerwear|accessory), \
+You receive a JSON payload with: destination, mood, style, weather, notes, kid_mode, and a \
+list of `candidates`. Each candidate has: id, slot (top|bottom|dress|shoes|outerwear|accessory), \
 category, colors, pattern, formality, seasonality.
+
+`style` is the aesthetic tradition the user wants to dress within. When set, honour it. \
+The vocabulary:
+- streetwear: oversized fits, sneakers, graphic/branded pieces, hoodies/bombers, layered.
+- minimal: clean lines, monochrome or 2-tone, tailored basics, no logos.
+- classic: timeless silhouettes (trench, oxford shirt, denim, loafers), navy/khaki/white.
+- preppy: collared shirts, knitwear, pleated skirts/chinos, blazers, loafers.
+- bohemian: flowing fabrics, earth tones, layered jewellery, sandals.
+- athleisure: technical fabrics, sneakers, joggers/leggings, sweat-set energy.
+- avant_garde: asymmetric, sculptural, unconventional pairings, statement pieces.
+- smart_casual: blazer-meets-denim, polished sneakers OR loafers, no tie.
+If style is null, pick the aesthetic that best matches the candidates + destination.
 
 Compose 2-3 complete outfits. Hard rules:
 - Each outfit MUST include shoes.
@@ -289,6 +348,33 @@ _STYLIST_KID_SUFFIX = (
     "\n\nThe wearer is a child. Keep rationales playful, encouraging, and under 15 words. "
     "Avoid any product/brand names."
 )
+
+_REFINE_SYSTEM = """\
+You are a professional personal stylist refining an outfit through chat.
+
+You receive: the outfit's current items, the user's full closet (`candidates`), \
+the conversation so far, and the user's latest message. Update the outfit \
+based on what they asked.
+
+Hard rules (same as composition):
+- Final outfit MUST include shoes.
+- MUST include either (top + bottom) OR a dress.
+- Every item_id MUST come from `candidates` — never invent items.
+- Keep items the user didn't object to.
+- If they ask for something you don't have in the closet, say so and propose \
+  the closest substitute from candidates.
+
+Output ONLY this JSON, no markdown:
+{
+  "outfit": {
+    "items": [{"item_id": "<id>", "slot": "<slot>"}, ...],
+    "rationale": "<one sentence, second person, why this works now>",
+    "style": "<streetwear|minimal|classic|preppy|bohemian|athleisure|avant_garde|smart_casual|null>"
+  },
+  "message": "<your reply to the user, second person, 1-3 sentences>"
+}
+"""
+
 
 _GAP_SYSTEM = """\
 You analyse the user's wardrobe to identify the 3-5 most impactful missing items.
@@ -589,12 +675,14 @@ class ProductionGateway:
         weather: WeatherSnapshot | None,
         notes: str | None,
         kid_mode: bool,
+        style: str | None = None,
     ) -> StylistResult:
         model = "claude-haiku-4-5" if kid_mode else self._anthropic_model
         system = _STYLIST_SYSTEM + (_STYLIST_KID_SUFFIX if kid_mode else "")
         payload = {
             "destination": destination,
             "mood": mood,
+            "style": style,
             "weather": weather.model_dump(mode="json") if weather else None,
             "notes": notes,
             "kid_mode": kid_mode,
@@ -684,6 +772,61 @@ class ProductionGateway:
             r = await c.get(result_url)
             r.raise_for_status()
             return TryonResult(image_bytes=r.content, model_id=self._tryon_model.split(":")[0])
+
+    async def refine_outfit(
+        self,
+        *,
+        current_items: list[dict[str, Any]],
+        candidates: list[dict[str, Any]],
+        history: list[dict[str, str]],
+        user_message: str,
+        destination: str | None,
+        mood: str | None,
+        style: str | None,
+        kid_mode: bool,
+    ) -> RefineResult:
+        """One-turn refinement: read the chat history, return revised outfit + reply."""
+        model = "claude-haiku-4-5" if kid_mode else self._anthropic_model
+        # We pack the outfit/closet/context into the system prompt as a JSON
+        # block so the conversation messages stay as conversation messages
+        # (better for Claude's chat-tuned behaviour than embedding everything
+        # in a single user turn).
+        context = {
+            "current_outfit_items": current_items,
+            "candidates": candidates,
+            "destination": destination,
+            "mood": mood,
+            "style": style,
+            "kid_mode": kid_mode,
+        }
+        system = _REFINE_SYSTEM + "\n\nCONTEXT:\n" + json.dumps(context)
+
+        # Build message array from history + the new user turn.
+        messages: list[dict[str, Any]] = []
+        for h in history:
+            role = h.get("role")
+            content = h.get("content")
+            if role in ("user", "assistant") and content:
+                messages.append({"role": role, "content": content})
+        messages.append({"role": "user", "content": user_message})
+
+        msg = await self._anthropic.messages.create(
+            model=model,
+            max_tokens=1500,
+            system=system,
+            messages=messages,  # type: ignore[arg-type]  # SDK's MessageParam TypedDict
+        )
+        text = "".join(b.text for b in msg.content if b.type == "text")
+        parsed = _extract_json(text)
+        outfit_data = parsed.get("outfit") or {}
+        return RefineResult(
+            items=outfit_data.get("items") or current_items,
+            rationale=outfit_data.get("rationale"),
+            style=outfit_data.get("style") or style,
+            message=str(parsed.get("message", "")).strip()
+            or "Updated. Tap to render the try-on again.",
+            model_id=model,
+        )
 
     async def aclose(self) -> None:
         await self._http.aclose()

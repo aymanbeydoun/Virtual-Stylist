@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing(3),
     alignItems: "center",
   },
-  primaryText: { color: palette.background, fontWeight: "700", fontSize: 16 },
+  primaryText: { color: palette.onAccent, fontWeight: "700", fontSize: 16 },
   secondary: {
     backgroundColor: palette.surface,
     padding: spacing(4),

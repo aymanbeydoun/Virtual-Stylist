@@ -76,6 +76,10 @@ class StyleProfile(Base):
     preferred_colors: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     disliked_categories: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     notes: Mapped[str | None] = mapped_column(Text)
+    # Aesthetic default applied to every stylist call unless the per-request
+    # `style` field overrides it. Free-text rather than enum so we can evolve
+    # the taxonomy without migrations.
+    preferred_style: Mapped[str | None] = mapped_column(String(40))
 
     created_at: Mapped[datetime] = created_at_col()
     updated_at: Mapped[datetime] = updated_at_col()

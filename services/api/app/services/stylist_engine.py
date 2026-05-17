@@ -15,11 +15,26 @@ from app.models.outfits import (
     OutfitSlot,
     OutfitSource,
 )
-from app.models.users import OwnerKind
+from app.models.users import OwnerKind, StyleProfile
 from app.models.wardrobe import WardrobeItem
 from app.schemas.common import WeatherSnapshot
 from app.services.model_gateway import StylistResult, get_model_gateway
 from app.services.weather import get_weather
+
+
+async def _resolved_default_style(
+    db: AsyncSession, owner_kind: OwnerKind, owner_id: uuid.UUID
+) -> str | None:
+    """Return the saved preferred_style for the owner, or None."""
+    profile = (
+        await db.execute(
+            select(StyleProfile).where(
+                StyleProfile.owner_kind == owner_kind,
+                StyleProfile.owner_id == owner_id,
+            )
+        )
+    ).scalar_one_or_none()
+    return profile.preferred_style if profile else None
 
 _CATEGORY_TO_SLOT = {
     "tops": OutfitSlot.top,
@@ -161,6 +176,7 @@ async def generate_outfits(
     mood: str,
     notes: str | None,
     kid_mode: bool,
+    style: str | None = None,
     lat: float | None = None,
     lon: float | None = None,
 ) -> tuple[list[Outfit], WeatherSnapshot | None]:
@@ -171,6 +187,11 @@ async def generate_outfits(
     if not items:
         return [], weather
 
+    # Resolve style: per-request value wins; fall back to the user's saved
+    # default in style_profiles so a streetwear-leaning user gets streetwear
+    # by default without re-picking every time.
+    resolved_style = style or await _resolved_default_style(db, owner_kind, owner_id)
+
     candidates = [_serialize_candidate(i) for i in items]
     item_by_id = {str(i.id): i for i in items}
 
@@ -179,6 +200,7 @@ async def generate_outfits(
         candidates=candidates,
         destination=destination,
         mood=mood,
+        style=resolved_style,
         weather=weather,
         notes=notes,
         kid_mode=kid_mode,
@@ -197,6 +219,7 @@ async def generate_outfits(
             source=OutfitSource.ai_generated,
             destination=destination,
             mood=mood,
+            style=resolved_style,
             weather_snapshot=weather,
             rationale=outfit_data.get("rationale"),
             confidence=outfit_data.get("confidence"),

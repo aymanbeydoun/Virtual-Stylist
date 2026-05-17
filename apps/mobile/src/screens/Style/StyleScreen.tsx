@@ -7,7 +7,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { stylistApi } from "@/api/stylist";
-import type { Destination, Mood, Outfit } from "@/api/types";
+import type { Destination, Mood, Outfit, Style } from "@/api/types";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useActiveProfile } from "@/state/profile";
 import { palette, radii, spacing } from "@/theme";
@@ -47,14 +47,33 @@ const KID_MOODS: { id: Mood; label: string }[] = [
   { id: "confident", label: "Hero 🦸" },
 ];
 
+const STYLES: { id: Style; label: string }[] = [
+  { id: "streetwear", label: "Streetwear" },
+  { id: "minimal", label: "Minimal" },
+  { id: "classic", label: "Classic" },
+  { id: "smart_casual", label: "Smart casual" },
+  { id: "preppy", label: "Preppy" },
+  { id: "athleisure", label: "Athleisure" },
+  { id: "bohemian", label: "Bohemian" },
+  { id: "avant_garde", label: "Avant-garde" },
+];
+
+const KID_STYLES: { id: Style; label: string }[] = [
+  { id: "streetwear", label: "Streetwear 🛹" },
+  { id: "athleisure", label: "Sporty ⚽" },
+  { id: "classic", label: "Smart 🎒" },
+];
+
 export function StyleScreen() {
   const nav = useNavigation<Nav>();
   const profile = useActiveProfile();
   const [destination, setDestination] = useState<Destination | null>(null);
   const [mood, setMood] = useState<Mood | null>(null);
+  const [style, setStyle] = useState<Style | null>(null);
 
   const destinations = profile.isKidMode ? KID_DESTINATIONS : ADULT_DESTINATIONS;
   const moods = profile.isKidMode ? KID_MOODS : MOODS;
+  const styles_ = profile.isKidMode ? KID_STYLES : STYLES;
   const accent = profile.isKidMode ? palette.kidPrimary : palette.accent;
 
   const generate = useMutation({
@@ -63,6 +82,7 @@ export function StyleScreen() {
         { kind: profile.ownerKind, id: profile.ownerId ?? undefined },
         destination!,
         mood!,
+        { style: style ?? undefined },
       ),
   });
 
@@ -102,13 +122,28 @@ export function StyleScreen() {
           ))}
         </View>
 
+        <Text style={styles.section}>
+          Style <Text style={styles.sectionOptional}>(optional)</Text>
+        </Text>
+        <View style={styles.chips}>
+          {styles_.map((s) => (
+            <Chip
+              key={s.id}
+              label={s.label}
+              active={style === s.id}
+              accent={accent}
+              onPress={() => setStyle(style === s.id ? null : s.id)}
+            />
+          ))}
+        </View>
+
         <Pressable
           style={[styles.cta, { backgroundColor: accent }, (!destination || !mood) && { opacity: 0.4 }]}
           disabled={!destination || !mood || generate.isPending}
           onPress={() => generate.mutate()}
         >
           {generate.isPending ? (
-            <ActivityIndicator color={palette.background} />
+            <ActivityIndicator color={palette.onAccent} />
           ) : (
             <Text style={styles.ctaText}>
               {profile.isKidMode ? "Style my mission ✨" : "Style me"}
@@ -156,7 +191,7 @@ function Chip({
       style={[styles.chip, active && { backgroundColor: accent, borderColor: accent }]}
       onPress={onPress}
     >
-      <Text style={[styles.chipText, active && { color: palette.background, fontWeight: "700" }]}>
+      <Text style={[styles.chipText, active && { color: palette.onAccent, fontWeight: "700" }]}>
         {label}
       </Text>
     </Pressable>
@@ -210,6 +245,7 @@ const styles = StyleSheet.create({
   eyebrow: { color: palette.textMuted, fontSize: 12, letterSpacing: 1, textTransform: "uppercase" },
   title: { color: palette.text, fontSize: 28, fontWeight: "700", marginTop: 4 },
   section: { color: palette.text, fontSize: 16, fontWeight: "600", marginTop: spacing(6), marginBottom: spacing(3) },
+  sectionOptional: { color: palette.textMuted, fontSize: 13, fontWeight: "400" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing(2) },
   chip: {
     paddingHorizontal: spacing(4),
@@ -221,7 +257,7 @@ const styles = StyleSheet.create({
   },
   chipText: { color: palette.text },
   cta: { padding: spacing(4), borderRadius: radii.md, alignItems: "center", marginTop: spacing(8) },
-  ctaText: { color: palette.background, fontWeight: "700", fontSize: 16 },
+  ctaText: { color: palette.onAccent, fontWeight: "700", fontSize: 16 },
   weather: { color: palette.textMuted, marginTop: spacing(5) },
   outfit: {
     backgroundColor: palette.surface,

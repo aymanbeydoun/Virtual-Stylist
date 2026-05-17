@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing(2),
     borderRadius: radii.pill,
   },
-  addButtonText: { color: palette.background, fontWeight: "700" },
+  addButtonText: { color: palette.onAccent, fontWeight: "700" },
   ghostButton: {
     paddingHorizontal: spacing(3),
     paddingVertical: spacing(2),

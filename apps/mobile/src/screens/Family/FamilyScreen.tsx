@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing(2),
     borderRadius: radii.pill,
   },
-  addButtonText: { color: palette.background, fontWeight: "700" },
+  addButtonText: { color: palette.onAccent, fontWeight: "700" },
   row: {
     flexDirection: "row",
     alignItems: "center",

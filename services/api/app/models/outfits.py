@@ -49,6 +49,9 @@ class Outfit(Base):
     )
     destination: Mapped[str | None] = mapped_column(String(40))
     mood: Mapped[str | None] = mapped_column(String(40))
+    # Aesthetic axis: streetwear, minimal, classic, preppy, athleisure, etc.
+    # Free-text so we can evolve the taxonomy without migrations.
+    style: Mapped[str | None] = mapped_column(String(40))
     weather_snapshot: Mapped[WeatherSnapshot | None] = mapped_column(
         PydanticJSON(WeatherSnapshot)
     )
