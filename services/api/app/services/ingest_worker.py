@@ -141,6 +141,7 @@ async def ingest_item(ctx: dict[str, Any], item_id: str) -> None:
         item.seasonality = tags.seasonality
         item.embedding = tags.embedding
         item.confidence_scores = tags.confidence_scores
+        item.attributes = tags.attributes
         item.needs_review = tags.confidence_scores.min_confidence < 0.7
         item.status = "ready"
 
@@ -148,11 +149,83 @@ async def ingest_item(ctx: dict[str, Any], item_id: str) -> None:
         logger.info("item.ingested", item_id=str(item.id), category=item.category)
 
 
+async def _on_startup(ctx: dict[str, Any]) -> None:
+    logger.info("worker.startup", functions=[f.__name__ for f in WorkerSettings.functions])
+
+
+async def _on_shutdown(ctx: dict[str, Any]) -> None:
+    logger.info("worker.shutdown")
+
+
+async def _stalled_sweeper(ctx: dict[str, Any]) -> None:
+    """Periodic safety net: any row stuck `pending` for >10 minutes is moved
+    to `failed`. Without this, a worker that crashed mid-job leaves the item
+    in pending forever and the mobile UI polls indefinitely.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from app.models.tryons import OutfitTryon, TryonStatus
+
+    cutoff = datetime.now(UTC) - timedelta(minutes=10)
+    async with SessionLocal() as db:
+        items = (
+            await db.execute(
+                select(WardrobeItem).where(
+                    WardrobeItem.status == "pending",
+                    WardrobeItem.created_at < cutoff,
+                )
+            )
+        ).scalars().all()
+        for it in items:
+            it.status = "failed"
+            logger.warning("sweeper.item_stalled", item_id=str(it.id))
+        tryons = (
+            await db.execute(
+                select(OutfitTryon).where(
+                    OutfitTryon.status == TryonStatus.pending,
+                    OutfitTryon.created_at < cutoff,
+                )
+            )
+        ).scalars().all()
+        for t in tryons:
+            t.status = TryonStatus.failed
+            t.error_message = "render timed out (worker crash recovery)"
+            logger.warning("sweeper.tryon_stalled", tryon_id=str(t.id))
+        if items or tryons:
+            await db.commit()
+
+
 class WorkerSettings:
     functions: ClassVar[list[Any]] = [ingest_item, compose_outfit_image, tryon_outfit]
+    # Stalled-row sweeper runs every 2 minutes — its job is to mop up after the
+    # worker itself (or Redis) hiccups and leaves a row stuck in pending.
+    cron_jobs: ClassVar[list[Any]] = []  # populated below
     # Longer connect-timeout absorbs flaky Docker-bridge Redis reconnects on macOS.
     # Each Claude/Replicate call can take 30-60s — Arq's default 300s job timeout is fine.
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)
-    job_timeout = 180  # seconds, per job
+    # Resilient connection: retry on transient drops so a 1-2s Docker network
+    # blip doesn't kill the worker.
+    redis_settings.conn_retries = 5
+    redis_settings.conn_retry_delay = 2
+    job_timeout = 300  # seconds, per job (premium bg-removal can be 60s+)
     max_tries = 3
     keep_result = 300
+    on_startup = _on_startup
+    on_shutdown = _on_shutdown
+    # Health pings every 60s — Arq logs `j_complete / j_failed / queued` lines
+    # we can scrape if anything degrades.
+    health_check_interval = 60
+
+
+# Register the periodic sweeper after WorkerSettings is defined so it can
+# reference the class attributes.
+try:
+    from arq.cron import cron
+
+    # Every 2 minutes (sweep stalled rows). Building the set explicitly keeps
+    # the line under ruff's 100-char limit.
+    _EVERY_2_MIN = set(range(0, 60, 2))
+    WorkerSettings.cron_jobs = [cron(_stalled_sweeper, minute=_EVERY_2_MIN)]
+except ImportError:
+    # arq.cron not available in older arq — workers will run without the sweeper.
+    logger.warning("worker.cron_unavailable")

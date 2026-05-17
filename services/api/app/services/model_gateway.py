@@ -25,7 +25,7 @@ import base64
 import json
 import random
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 import httpx
@@ -46,6 +46,10 @@ class TagResult:
     seasonality: list[str]
     embedding: list[float]
     confidence_scores: ConfidenceScores
+    # Deep attributes — neckline, sleeve_length, fabric, fit, pattern_subtype,
+    # embellishments, weight_class, waist_rise, hem_length, etc. Free-form so
+    # we can evolve the taxonomy without re-deploying the schema.
+    attributes: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -163,6 +167,13 @@ class StubGateway:
             confidence_scores=ConfidenceScores(
                 root={"category": 0.92, "pattern": 0.81, "color": 0.95}
             ),
+            attributes={
+                "neckline": "crew",
+                "sleeve_length": "short",
+                "fabric": "cotton",
+                "fit": "regular",
+                "weight_class": "midweight",
+            },
         )
 
     async def remove_background(self, image_bytes: bytes) -> bytes:
@@ -277,9 +288,12 @@ class StubGateway:
 # Production gateway — Replicate + Anthropic
 # ---------------------------------------------------------------------------
 
+# Long enum strings inside the JSON template push past ruff's 100-char limit;
+# the prompt is more readable with them on one line so we silence the rule.
+# ruff: noqa: E501
 _TAGGING_SYSTEM = """\
-You are a fashion catalogue tagger. Given a single clothing item photo, return ONLY a
-JSON object with this exact shape — no markdown, no prose:
+You are a senior fashion catalogue tagger. Given a single clothing item photo,
+return ONLY a JSON object with this exact shape — no markdown, no prose:
 
 {
   "category": "<gender>.<group>.<subcategory>",
@@ -289,21 +303,49 @@ JSON object with this exact shape — no markdown, no prose:
   ],
   "formality": 1-10,
   "seasonality": ["spring"|"summer"|"fall"|"winter", ...],
-  "confidence_scores": {"category": 0.0-1.0, "pattern": 0.0-1.0, "color": 0.0-1.0}
+  "attributes": {
+    "neckline": "crew|v|scoop|square|mock|turtleneck|halter|collared|deep_v|off_shoulder|none",
+    "sleeve_length": "sleeveless|cap|short|three_quarter|long|extra_long|none",
+    "fabric": "cotton|linen|silk|wool|cashmere|denim|leather|suede|knit|synthetic|technical|fur|mesh|other",
+    "fit": "skinny|slim|regular|relaxed|oversized|tailored|none",
+    "pattern_subtype": "windowpane|gingham|herringbone|paisley|tropical|tartan|polka_dot|abstract|graphic_text|none",
+    "embellishments": ["sequins"|"embroidery"|"beading"|"hardware"|"lace"|"none"],
+    "weight_class": "lightweight|midweight|heavyweight",
+    "waist_rise": "high|mid|low|none",
+    "hem_length": "cropped|regular|midi|maxi|none",
+    "transparency": "opaque|semi_sheer|sheer"
+  },
+  "confidence_scores": {
+    "category": 0.0-1.0,
+    "pattern": 0.0-1.0,
+    "color": 0.0-1.0,
+    "attributes": 0.0-1.0
+  }
 }
 
 Category guide:
 - <gender> is one of: womens, mens, kids, accessories.
-- Use 'accessories' for jewelry, belts, hats, bags, scarves.
+- Use 'accessories' for jewelry, belts, hats, bags, scarves, sunglasses.
 - Examples: 'womens.tops.blouse', 'mens.shoes.loafer', 'kids.bottoms.shorts',
   'accessories.jewelry.necklace'.
 
 Formality scale: 1=loungewear, 5=smart-casual, 10=black-tie.
 
-Rules:
+Attribute rules:
+- Pick exactly one value per attribute key (except `embellishments`, which is
+  a list). Use 'none' when the attribute doesn't apply (e.g. a shoe has no
+  neckline).
+- 'fabric' is your best visual guess. If unsure between cotton/linen/synthetic,
+  pick the closest and lower the attributes confidence score.
+- `embellishments`: include every visible decoration. Empty list / ["none"]
+  if the item is plain.
+- 'weight_class' drives weather-aware styling. A puffer is heavyweight; a
+  silk camisole is lightweight.
+
+General rules:
 - Return 1-3 dominant colors. Weights sum to ~1.0, sorted by weight descending.
 - Hex must be a real 6-digit color present in the photo. No #000000 placeholders.
-- If unsure on any field, lower its confidence score. Never invent.
+- If unsure on any field, lower its confidence score. NEVER invent.
 - Output ONLY the JSON object. No code fences. No commentary.
 """
 
@@ -542,28 +584,22 @@ class ProductionGateway:
             return image_bytes
 
     async def tag_item(self, image_bytes: bytes) -> TagResult:
-        category, pattern, colors, formality, seasonality, confidence = await self._tag_with_claude(
-            image_bytes
-        )
+        tagged = await self._tag_with_claude(image_bytes)
         embedding = await self._embed_clip(image_bytes)
         return TagResult(
-            category=category,
-            pattern=pattern,
-            colors=colors,
-            formality=formality,
-            seasonality=seasonality,
+            category=tagged["category"],
+            pattern=tagged["pattern"],
+            colors=tagged["colors"],
+            formality=tagged["formality"],
+            seasonality=tagged["seasonality"],
             embedding=embedding,
-            confidence_scores=ConfidenceScores(root=confidence),
+            confidence_scores=ConfidenceScores(root=tagged["confidence_scores"]),
+            attributes=tagged["attributes"],
         )
 
-    async def _tag_with_claude(
-        self, image_bytes: bytes
-    ) -> tuple[str, str, list[ColorTag], int, list[str], dict[str, float]]:
+    async def _tag_with_claude(self, image_bytes: bytes) -> dict[str, Any]:
         media_type = _detect_image_media_type(image_bytes)
         b64 = base64.b64encode(image_bytes).decode()
-        # The Anthropic SDK's MessageParam type is a typed dict; declared inline
-        # here as Any-typed so we can use the dynamic media_type. The runtime
-        # API accepts any valid image/{jpeg,png,gif,webp}.
         content: list[dict[str, Any]] = [
             {
                 "type": "image",
@@ -577,20 +613,40 @@ class ProductionGateway:
         ]
         msg = await self._anthropic.messages.create(
             model=self._anthropic_vision_model,
-            max_tokens=600,
+            # Bumped from 600 → 1200 to accommodate the new attributes block.
+            max_tokens=1200,
             system=_TAGGING_SYSTEM,
             messages=[{"role": "user", "content": content}],  # type: ignore[typeddict-item]
         )
         text = "".join(b.text for b in msg.content if b.type == "text")
         parsed = _extract_json(text)
-        return (
-            parsed["category"],
-            parsed["pattern"],
-            [_color_from_payload(c) for c in parsed["colors"]],
-            int(parsed["formality"]),
-            parsed["seasonality"],
-            {k: float(v) for k, v in parsed["confidence_scores"].items()},
-        )
+        # Coerce attributes safely. Older models or rare cases may omit it;
+        # treat missing → {} and pass through dotted keys.
+        attributes = parsed.get("attributes") or {}
+        if not isinstance(attributes, dict):
+            attributes = {}
+        # Normalise common attribute values to lowercase / underscore form.
+        attributes = {
+            str(k): (
+                str(v).lower().strip()
+                if isinstance(v, str)
+                else [str(x).lower() for x in v]
+                if isinstance(v, list)
+                else v
+            )
+            for k, v in attributes.items()
+        }
+        return {
+            "category": parsed["category"],
+            "pattern": parsed["pattern"],
+            "colors": [_color_from_payload(c) for c in parsed["colors"]],
+            "formality": int(parsed["formality"]),
+            "seasonality": parsed["seasonality"],
+            "attributes": attributes,
+            "confidence_scores": {
+                k: float(v) for k, v in parsed["confidence_scores"].items()
+            },
+        }
 
     async def _embed_clip(self, image_bytes: bytes) -> list[float]:
         """Replicate CLIP embedding. Returns zeros on failure so similarity

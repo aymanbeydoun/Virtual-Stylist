@@ -49,6 +49,8 @@ class WardrobeItemOut(BaseModel):
     pattern: Pattern | None
     formality: int | None
     seasonality: list[str] = []
+    attributes: dict[str, object] = {}
+    quality_tier: str = "standard"
     needs_review: bool
     status: str
     created_at: datetime
