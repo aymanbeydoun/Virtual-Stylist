@@ -199,12 +199,28 @@ export function OutfitDetailScreen() {
         </View>
 
         {/* Chat */}
-        <Text style={styles.section}>Chat with Laura</Text>
+        <Text style={styles.section}>Chat with Laura · AI Stylist</Text>
         {messages.length === 0 ? (
           <View style={styles.chatEmpty}>
-            <Text style={styles.chatHint}>
-              Tap a suggestion or type your own at the bottom.
-            </Text>
+            {/* First-touch intro so users know who Laura is. */}
+            <View style={styles.lauraIntroRow}>
+              <View style={styles.lauraAvatar}>
+                <Text style={styles.lauraAvatarText}>L</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.lauraNameRow}>
+                  <Text style={styles.lauraName}>Laura</Text>
+                  <View style={styles.aiTag}>
+                    <Text style={styles.aiTagText}>AI</Text>
+                  </View>
+                </View>
+                <Text style={styles.lauraIntroText}>
+                  Hi! I&apos;m your AI stylist. Tell me where you&apos;re going and
+                  I&apos;ll pull together looks from your closet — or tap a
+                  suggestion below.
+                </Text>
+              </View>
+            </View>
             <View style={styles.suggestionRow}>
               {CHAT_SUGGESTIONS.map((s) => (
                 <Pressable
@@ -769,6 +785,50 @@ const styles = StyleSheet.create({
     gap: spacing(3),
   },
   chatHint: { color: palette.textMuted, lineHeight: 20 },
+  lauraIntroRow: {
+    flexDirection: "row",
+    gap: spacing(3),
+    alignItems: "flex-start",
+  },
+  lauraAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#0A0A0A",
+    alignItems: "center",
+    justifyContent: "center",
+    // Match the icon's iridescent feel with a subtle accent ring.
+    borderWidth: 1.5,
+    borderColor: palette.accent,
+  },
+  lauraAvatarText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700",
+    fontFamily: "Didot",
+  },
+  lauraNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing(2),
+    marginBottom: 2,
+  },
+  lauraName: { color: palette.text, fontSize: 15, fontWeight: "700" },
+  aiTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    backgroundColor: palette.background,
+    borderWidth: 1,
+    borderColor: palette.surfaceAlt,
+  },
+  aiTagText: {
+    color: palette.textMuted,
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  lauraIntroText: { color: palette.textMuted, lineHeight: 19, fontSize: 13 },
   suggestionRow: {
     flexDirection: "row",
     flexWrap: "wrap",

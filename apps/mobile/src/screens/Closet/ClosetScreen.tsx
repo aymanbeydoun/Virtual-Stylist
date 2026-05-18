@@ -3,8 +3,9 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Swipeable } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { wardrobeApi } from "@/api/wardrobe";
@@ -112,6 +113,10 @@ function ItemCard({ item, onOpen }: { item: WardrobeItem; onOpen: () => void }) 
   const createdMs = useMemo(() => new Date(item.created_at).getTime(), [item.created_at]);
   const [stalled, setStalled] = useStalled(item.status === "pending", createdMs);
 
+  // Ref to programmatically close the swipeable after the user confirms or
+  // cancels the destructive action — otherwise it stays half-open.
+  const swipeRef = useRef<Swipeable>(null);
+
   const retry = useMutation({
     mutationFn: () => wardrobeApi.retry(item.id),
     onSuccess: () => {
@@ -127,6 +132,25 @@ function ItemCard({ item, onOpen }: { item: WardrobeItem; onOpen: () => void }) 
     onError: (err) =>
       Alert.alert("Couldn't delete", err instanceof Error ? err.message : "Try again."),
   });
+
+  // Show a confirmation Alert before destructive delete — iOS HIG pattern.
+  const confirmDelete = () => {
+    Alert.alert(
+      "Delete this item?",
+      "It will be removed from your closet. You can&apos;t undo this from the app.",
+      [
+        { text: "Cancel", style: "cancel", onPress: () => swipeRef.current?.close() },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            swipeRef.current?.close();
+            remove.mutate();
+          },
+        },
+      ],
+    );
+  };
 
   const promptActions = (kind: "failed" | "stalled") => {
     const reason = item.failure_reason;
@@ -147,7 +171,25 @@ function ItemCard({ item, onOpen }: { item: WardrobeItem; onOpen: () => void }) 
 
   const tappable = item.status !== "pending" || stalled;
 
+  // Swipe-left reveals a Delete button. Used iOS-native overshootRight=false so
+  // the reveal feels like Mail / Messages. Friction is low; the confirmation
+  // Alert protects against accidental swipes.
+  const renderRightActions = () => (
+    <Pressable style={styles.deleteAction} onPress={confirmDelete}>
+      <Ionicons name="trash-outline" size={20} color={palette.onAccent} />
+      <Text style={styles.deleteActionText}>Delete</Text>
+    </Pressable>
+  );
+
   return (
+    <Swipeable
+      ref={swipeRef}
+      renderRightActions={renderRightActions}
+      overshootRight={false}
+      friction={2}
+      rightThreshold={40}
+      containerStyle={styles.swipeContainer}
+    >
     <Pressable
       style={styles.card}
       onPress={() => {
@@ -203,6 +245,7 @@ function ItemCard({ item, onOpen }: { item: WardrobeItem; onOpen: () => void }) 
         )}
       </View>
     </Pressable>
+    </Swipeable>
   );
 }
 
@@ -277,7 +320,23 @@ const styles = StyleSheet.create({
   emptyState: { padding: spacing(8), alignItems: "center" },
   emptyTitle: { color: palette.text, fontSize: 18, fontWeight: "600", marginBottom: spacing(2) },
   emptyText: { color: palette.textMuted, textAlign: "center" },
+  // Swipeable wrapper. flex:1 so it fills the grid column properly.
+  swipeContainer: { flex: 1, borderRadius: radii.md, overflow: "hidden" },
   card: { flex: 1, backgroundColor: palette.surface, borderRadius: radii.md, overflow: "hidden" },
+  deleteAction: {
+    backgroundColor: palette.danger,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: spacing(4),
+    width: 80,
+    gap: 4,
+  },
+  deleteActionText: {
+    color: palette.onAccent,
+    fontWeight: "700",
+    fontSize: 11,
+    letterSpacing: 0.4,
+  },
   thumb: { width: "100%", aspectRatio: 1, backgroundColor: palette.surfaceAlt },
   thumbPlaceholder: { alignItems: "center", justifyContent: "center", gap: 4 },
   thumbFailed: { backgroundColor: "#FBEAEA" },
