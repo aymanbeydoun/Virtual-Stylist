@@ -58,33 +58,40 @@ MODELS_DIR = "/models"
 FITDIT_REPO = "https://github.com/BoyuanJiang/FitDiT.git"
 FITDIT_HF_WEIGHTS = "BoyuanJiang/FitDiT"
 
-# Build the container image. We pin PyTorch + diffusers to FitDiT's known-good
-# range; the FitDiT repo lacks a strict pinned requirements.txt so we hand-pick.
+# Build the container image. PyTorch/diffusers pinned because FitDiT is
+# sensitive to those versions; everything else stays loose so gradio can
+# pull whatever pydantic/fastapi it wants without a resolver conflict.
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("git", "libgl1", "libglib2.0-0")
     .pip_install(
+        # Versions from FitDiT's upstream requirements.txt, plus extras
+        # for the parts we use (DWPose, HumanParsing) which import onnx
+        # at runtime. The official req.txt pins are tight but we loosen
+        # a few to avoid resolver conflicts with our other deps.
         "torch==2.4.0",
         "torchvision==0.19.0",
-        "diffusers==0.30.3",
-        "transformers==4.45.2",
-        "accelerate==1.0.1",
-        "huggingface_hub==0.25.2",
-        "Pillow==10.4.0",
-        "numpy==1.26.4",
-        "scipy==1.14.1",
-        "opencv-python-headless==4.10.0.84",
-        "einops==0.8.0",
-        "safetensors==0.4.5",
-        "fastapi[standard]==0.115.0",
+        "accelerate==0.31.0",
+        "diffusers==0.31.0",
+        "transformers==4.39.3",
+        "numpy<2",
+        "scikit-image",
+        "huggingface_hub>=0.25,<0.27",
+        "onnxruntime",         # required by FitDiT for DWPose + parsing
+        "opencv-python-headless",
+        "matplotlib",
+        "einops",
+        "safetensors",
+        "Pillow>=10",
+        "scipy",
+        # FitDiT's gradio_sd3.py has a top-level `import gradio`. We don't
+        # use the UI, but the import has to succeed to reach the
+        # FitDiTGenerator class definition below it.
+        "gradio",
     )
-    .run_commands(
-        # Clone FitDiT inference code so the function imports its
-        # `cat_vton_pipeline` (or equivalent) classes.
-        f"git clone {FITDIT_REPO} /opt/fitdit",
-    )
+    .run_commands(f"git clone {FITDIT_REPO} /opt/fitdit")
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"})
-    .pip_install("hf-transfer==0.1.8")  # parallel chunked downloads from HF
+    .pip_install("hf-transfer")
 )
 
 app = modal.App(APP_NAME, image=image)
@@ -106,68 +113,176 @@ def predict(payload: dict) -> dict:
         "person_image": "<base64 jpeg>",
         "garment_image": "<base64 jpeg/png>",
         "category": "upper_body" | "lower_body" | "dresses",
-        "garment_description": "<optional short text>",
-        "steps": 30                  # diffusion steps; 30 is the FitDiT default
+        "steps": 20                  # diffusion steps; FitDiT default
       }
 
-    Response JSON:
+    Response JSON (200):
       { "image_b64": "<base64 jpeg>", "duration_ms": int }
+    Response JSON (4xx/5xx):
+      { "error": "<message>" }
     """
     import base64
     import sys
     import time
 
+    from fastapi.responses import JSONResponse
+
     started = time.monotonic()
 
     person_b64 = payload.get("person_image")
     garm_b64 = payload.get("garment_image")
-    category = payload.get("category", "upper_body")
-    garment_desc = payload.get("garment_description", "garment")
-    steps = int(payload.get("steps", 30))
-
+    # Upstream FitDiT uses "Upper-body" / "Lower-body" / "Dresses" as its
+    # category labels. We accept the underscore form (matching IDM-VTON's
+    # API) and translate.
+    category_in = payload.get("category", "upper_body")
+    category_map = {
+        "upper_body": "Upper-body",
+        "lower_body": "Lower-body",
+        "dresses": "Dresses",
+    }
     if not person_b64 or not garm_b64:
-        return {"error": "person_image and garment_image required"}, 400  # type: ignore[return-value]
-    if category not in ("upper_body", "lower_body", "dresses"):
-        return {"error": "category must be upper_body|lower_body|dresses"}, 400  # type: ignore[return-value]
+        return JSONResponse(
+            {"error": "person_image and garment_image required"},
+            status_code=400,
+        )
+    if category_in not in category_map:
+        return JSONResponse(
+            {"error": "category must be upper_body|lower_body|dresses"},
+            status_code=400,
+        )
+    category = category_map[category_in]
+    steps = int(payload.get("steps", 20))
+    # Higher resolution = better detail + identity preservation.
+    # FitDiT only accepts these three values.
+    resolution = payload.get("resolution", "768x1024")
+    if resolution not in ("768x1024", "1152x1536", "1536x2048"):
+        return JSONResponse(
+            {"error": "resolution must be 768x1024|1152x1536|1536x2048"},
+            status_code=400,
+        )
+    image_scale = float(payload.get("image_scale", 2.0))
 
-    # Lazy-import FitDiT inference. The repo's structure isn't fully PyPI-
-    # packaged so we extend sys.path to its checked-out directory.
+    # Lazy-import FitDiT. The upstream repo isn't PyPI-packaged so we add
+    # its checkout dir to sys.path. The entry-point class lives in
+    # `gradio_sd3.FitDiTGenerator` (see the upstream README).
     sys.path.insert(0, "/opt/fitdit")
     try:
         from PIL import Image
 
-        # The exact module path depends on FitDiT's repo layout. The
-        # canonical entry-point at the time of writing is
-        # `gradio_app.FitDiTGenerator`. If this import fails after a repo
-        # update, check the upstream README for the current API.
-        from gradio_app import FitDiTGenerator  # type: ignore[import-not-found]
+        from gradio_sd3 import FitDiTGenerator  # type: ignore[import-not-found]
     except Exception as exc:
-        return {"error": f"failed to import FitDiT: {exc}"}, 500  # type: ignore[return-value]
+        # Diagnostic: list what IS available, so a cached-image mismatch is
+        # obvious from the error response alone.
+        import os
 
-    # Build generator once per container (Modal caches the function's closure
-    # across calls). The check guards against re-init on warm calls.
+        diag = {
+            "error": f"failed to import FitDiT: {exc}",
+            "sys_path_head": sys.path[:5],
+            "opt_fitdit_exists": os.path.exists("/opt/fitdit"),
+            "opt_fitdit_files": (
+                sorted(os.listdir("/opt/fitdit"))[:10]
+                if os.path.exists("/opt/fitdit")
+                else "N/A"
+            ),
+        }
+        try:
+            import gradio as _g
+
+            diag["gradio_version"] = getattr(_g, "__version__", "unknown")
+        except Exception as g_exc:
+            diag["gradio_import_error"] = str(g_exc)
+        return JSONResponse(diag, status_code=500)
+
+    # Build generator once per container (Modal caches the function's
+    # closure across calls).
     global _generator  # noqa: PLW0603
     if "_generator" not in globals() or _generator is None:
-        _generator = FitDiTGenerator(
-            model_root=f"{MODELS_DIR}/FitDiT",
-            offload=False,
+        try:
+            _generator = FitDiTGenerator(
+                model_root=f"{MODELS_DIR}/FitDiT",
+                offload=False,
+                aggressive_offload=False,
+                device="cuda:0",
+                with_fp16=False,
+            )
+        except Exception as exc:
+            return JSONResponse(
+                {"error": f"failed to init FitDiT generator: {exc}"},
+                status_code=500,
+            )
+
+    # FitDiT expects FILE PATHS, not PIL Image objects. The methods call
+    # `Image.open(vton_img)` internally, which requires a path or a
+    # file-like object — a raw PIL.Image will AttributeError. Save the
+    # uploaded bytes to tempfiles, pass the paths.
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as pf:
+        pf.write(base64.b64decode(person_b64))
+        person_path = pf.name
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as gf:
+        gf.write(base64.b64decode(garm_b64))
+        garment_path = gf.name
+
+    try:
+        # Step 1: auto-generate the inpaint mask from the person photo.
+        # generate_mask returns (im_dict, pose_image) where im_dict is the
+        # Gradio ImageEditor dict — we pass it back to `process` as-is.
+        mask_dict, pose_image = _generator.generate_mask(
+            vton_img=person_path,
+            category=category,
+            offset_top=0,
+            offset_bottom=0,
+            offset_left=0,
+            offset_right=0,
         )
 
-    person_img = Image.open(io.BytesIO(base64.b64decode(person_b64))).convert("RGB")
-    garment_img = Image.open(io.BytesIO(base64.b64decode(garm_b64))).convert("RGB")
+        # FitDiT contract mismatch: generate_mask returns pose_image as a
+        # PIL.Image, but process() does `Image.fromarray(pose_image)` on
+        # it. Convert back to numpy so process can re-wrap.
+        import numpy as np
 
-    result = _generator.generate(
-        vton_img=person_img,
-        garm_img=garment_img,
-        pre_mask=None,             # let FitDiT auto-mask the target region
-        category=category,
-        n_steps=steps,
-        image_scale=2.0,           # paper recommended; keep
-        seed=-1,
-        num_samples=1,
-        resolution=1024,
-        garment_description=garment_desc,
-    )
+        if hasattr(pose_image, "size"):  # it's a PIL Image
+            pose_image = np.array(pose_image)
+
+        # Step 2: render the garment into the masked region. FitDiT's
+        # resolution arg is a string in the supported-resolutions set;
+        # "768x1024" is the fastest tier.
+        images = _generator.process(
+            vton_img=person_path,
+            garm_img=garment_path,
+            pre_mask=mask_dict,
+            pose_image=pose_image,
+            n_steps=steps,
+            image_scale=image_scale,
+            seed=-1,
+            num_images_per_prompt=1,
+            resolution=resolution,
+        )
+    except Exception as exc:
+        import traceback
+
+        return JSONResponse(
+            {
+                "error": f"inference failed: {type(exc).__name__}: {exc}",
+                "traceback": traceback.format_exc().splitlines()[-12:],
+            },
+            status_code=500,
+        )
+    finally:
+        # Cleanup temp files even on success — they're written under /tmp
+        # which is per-container but still polite to clean.
+        import os
+
+        for p in (person_path, garment_path):
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+
+    if not images:
+        return JSONResponse({"error": "model returned no images"}, status_code=500)
+    result = images[0] if isinstance(images, list) else images
 
     out_buf = io.BytesIO()
     result.save(out_buf, format="JPEG", quality=92)

@@ -1330,6 +1330,8 @@ class ProductionGateway:
             "category": category,
             "garment_description": desc,
             "steps": 30,
+            "resolution": "1152x1536",
+            "image_scale": 1.5,
         }
         async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=30.0)) as c:
             r = await c.post(self._modal_tryon_endpoint, json=payload)
