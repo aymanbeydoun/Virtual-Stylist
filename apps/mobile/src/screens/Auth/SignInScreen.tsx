@@ -81,7 +81,7 @@ export function SignInScreen() {
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.inner}>
-        <Text style={styles.title}>Virtual Stylist</Text>
+        <Text style={styles.title}>Stylaura</Text>
         <Text style={styles.subtitle}>Sign in to your closet.</Text>
 
         <Pressable

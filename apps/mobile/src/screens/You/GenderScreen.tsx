@@ -72,7 +72,7 @@ export function GenderScreen() {
         <Text style={styles.title}>Gender preference</Text>
         <Text style={styles.subtitle}>
           Filters outfit suggestions to one gender-coded section of your closet.
-          Without it, the stylist sometimes picks cross-gender items — which can
+          Without it, Laura sometimes picks cross-gender items — which can
           confuse try-on into rendering the wrong person. Accessories and
           jewelry are kept either way.
         </Text>

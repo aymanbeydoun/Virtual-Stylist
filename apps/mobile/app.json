@@ -1,14 +1,17 @@
 {
   "expo": {
-    "name": "Virtual Stylist",
+    "name": "Stylaura",
     "slug": "virtual-stylist",
     "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "virtualstylist",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "icon": "./assets/icon.png",
     "splash": {
-      "backgroundColor": "#0f172a"
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0A0A"
     },
     "ios": {
       "supportsTablet": true,
@@ -19,7 +22,14 @@
       }
     },
     "android": {
-      "package": "com.virtualstylist.app"
+      "package": "com.virtualstylist.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0A0A0A"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-image-picker",

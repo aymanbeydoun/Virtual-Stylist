@@ -1,15 +1,20 @@
-# Virtual Stylist
+# Stylaura
+
+> **Codebase name:** `virtual-stylist`. **Product name:** Stylaura. **AI agent:** Laura.
 
 An AI-powered virtual stylist and digital wardrobe for women, men, and kids.
-Upload your closet once, then get outfit suggestions tuned to your destination,
-mood, and the weather — with a family-friendly mode for parents and kids.
+Upload your closet once, then chat with Laura — your in-app AI stylist — for
+outfit suggestions tuned to your destination, mood, and the weather, with a
+family-friendly mode for parents and kids.
+
+Domains: [stylaura.ai](https://stylaura.ai) · [stylaura.app](https://stylaura.app)
 
 ## Vision
 
 Solve the universal "what to wear" problem with zero friction. Users photograph
-their clothes; computer vision tags them; an LLM-driven stylist composes 2–3
-complete outfits on demand. A monetization layer surfaces affiliate-shoppable
-staples that fill genuine gaps in the user's wardrobe.
+their clothes; computer vision tags them; Laura composes 2–3 complete outfits
+on demand. A monetization layer surfaces affiliate-shoppable staples that fill
+genuine gaps in the user's wardrobe.
 
 ## Design Documents
 

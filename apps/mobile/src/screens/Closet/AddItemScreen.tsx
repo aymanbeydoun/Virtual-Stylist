@@ -97,7 +97,7 @@ export function AddItemScreen() {
         if (!perm.granted) {
           Alert.alert(
             source === "camera" ? "Camera access denied" : "Photo library access denied",
-            "Enable it in iOS Settings → Virtual Stylist.",
+            "Enable it in iOS Settings → Stylaura.",
           );
           return;
         }

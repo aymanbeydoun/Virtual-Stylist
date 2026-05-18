@@ -187,7 +187,7 @@ export function YouScreen() {
                     </Text>
                     <Text style={styles.insightsBody}>
                       Generate an outfit + tap &quot;Wore it&quot; to feed
-                      the stylist what you actually like.
+                      Laura what you actually like.
                     </Text>
                   </View>
                 </View>

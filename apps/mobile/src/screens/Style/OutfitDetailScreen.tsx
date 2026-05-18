@@ -199,7 +199,7 @@ export function OutfitDetailScreen() {
         </View>
 
         {/* Chat */}
-        <Text style={styles.section}>Chat with your stylist</Text>
+        <Text style={styles.section}>Chat with Laura</Text>
         {messages.length === 0 ? (
           <View style={styles.chatEmpty}>
             <Text style={styles.chatHint}>
@@ -269,7 +269,7 @@ export function OutfitDetailScreen() {
           style={styles.composerInput}
           value={draft}
           onChangeText={setDraft}
-          placeholder="Ask the stylist to change something…"
+          placeholder="Ask Laura to change something…"
           placeholderTextColor={palette.textMuted}
           editable={!refine.isPending}
           multiline
