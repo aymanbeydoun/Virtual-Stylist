@@ -26,8 +26,8 @@ Deploy:
 Modal prints the public URL. Paste it into services/api/.env as:
   MODAL_TRYON_ENDPOINT=https://aymanbeydoun--virtual-stylist-tryon-idm-predict.modal.run
 
-The same `_modal_fitdit_step` in ProductionGateway works against this
-endpoint — they share the request/response schema (person_image,
+The same `_modal_tryon_step` in ProductionGateway works against this
+endpoint — endpoint-agnostic request/response schema (person_image,
 garment_image, category, returns image_b64).
 
 Cost (May 2026 Modal pricing):

@@ -8,7 +8,7 @@ them** — not a generic generated person. That visual check is the only
 acceptance gate that catches identity drift.
 
 Backend selected by env:
-  - MODAL_TRYON_ENDPOINT set in .env → FitDiT on Modal (~$0.005/garment)
+  - MODAL_TRYON_ENDPOINT set in .env → IDM-VTON on Modal (~$0.010/garment)
   - else → IDM-VTON on Replicate (~$0.06/garment)
 
 Run with:
@@ -95,7 +95,7 @@ async def main() -> int:
 
     from app.config import get_settings
     s = get_settings()
-    backend = "modal-fitdit" if s.modal_tryon_endpoint else "replicate-idm-vton"
+    backend = "modal-idm-vton" if s.modal_tryon_endpoint else "replicate-idm-vton"
     print(f"\nDone. backend={backend} model_id={result.model_id}")
     print(f"  Input person : {person_path}")
     print(f"  Input garment: {garment_path}")

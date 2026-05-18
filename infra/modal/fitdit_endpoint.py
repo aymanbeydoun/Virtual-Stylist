@@ -167,8 +167,6 @@ def predict(payload: dict) -> dict:
     # `gradio_sd3.FitDiTGenerator` (see the upstream README).
     sys.path.insert(0, "/opt/fitdit")
     try:
-        from PIL import Image
-
         from gradio_sd3 import FitDiTGenerator  # type: ignore[import-not-found]
     except Exception as exc:
         # Diagnostic: list what IS available, so a cached-image mismatch is

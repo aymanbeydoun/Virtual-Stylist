@@ -1282,23 +1282,23 @@ class ProductionGateway:
         renderable.sort(key=lambda g: order.get(g.slot, 99))
 
         # ----- Backend selection ----------------------------------------
-        # MODAL_TRYON_ENDPOINT set → route to self-hosted FitDiT on Modal
-        # (faster, world-class quality, no Replicate semaphore bottleneck).
+        # MODAL_TRYON_ENDPOINT set → route to self-hosted IDM-VTON on Modal
+        # (no Replicate semaphore bottleneck, ~8s warm per garment).
         # Otherwise fall back to IDM-VTON on Replicate.
         if self._modal_tryon_endpoint:
             current_person = person_image
             for garment in renderable:
-                current_person = await self._modal_fitdit_step(
+                current_person = await self._modal_tryon_step(
                     person_bytes=current_person,
                     garment=garment,
                     category=slot_to_category[garment.slot],
                 )
-            return TryonResult(image_bytes=current_person, model_id="modal-fitdit")
+            return TryonResult(image_bytes=current_person, model_id="modal-idm-vton")
 
         if not self._replicate_token:
             raise RuntimeError(
-                "set MODAL_TRYON_ENDPOINT (self-hosted FitDiT) or "
-                "REPLICATE_API_TOKEN (IDM-VTON) for try-on"
+                "set MODAL_TRYON_ENDPOINT (self-hosted IDM-VTON) or "
+                "REPLICATE_API_TOKEN (Replicate IDM-VTON) for try-on"
             )
         _, version = self._tryon_model.split(":", 1)
         current_person = person_image
@@ -1315,14 +1315,19 @@ class ProductionGateway:
             model_id=self._tryon_model.split(":")[0],
         )
 
-    async def _modal_fitdit_step(
+    async def _modal_tryon_step(
         self,
         *,
         person_bytes: bytes,
         garment: TryonInput,
         category: str,
     ) -> bytes:
-        """One FitDiT prediction via the Modal-hosted endpoint."""
+        """One try-on prediction via the Modal-hosted endpoint.
+
+        Endpoint-agnostic: the same request/response schema fits either
+        IDM-VTON (current) or FitDiT (kept available as a backup app).
+        The deployed app at MODAL_TRYON_ENDPOINT decides which model runs.
+        """
         desc = _strip_gender(garment.description) or garment.slot
         payload = {
             "person_image": base64.b64encode(person_bytes).decode(),
@@ -1330,8 +1335,6 @@ class ProductionGateway:
             "category": category,
             "garment_description": desc,
             "steps": 30,
-            "resolution": "1152x1536",
-            "image_scale": 1.5,
         }
         async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=30.0)) as c:
             r = await c.post(self._modal_tryon_endpoint, json=payload)
@@ -1339,10 +1342,10 @@ class ProductionGateway:
             body = r.json()
         err = body.get("error")
         if err:
-            raise RuntimeError(f"Modal FitDiT failed: {err}")
+            raise RuntimeError(f"Modal try-on failed: {err}")
         out_b64 = body.get("image_b64")
         if not out_b64:
-            raise RuntimeError("Modal FitDiT returned no image")
+            raise RuntimeError("Modal try-on returned no image")
         return base64.b64decode(out_b64)
 
     async def _idm_vton_step(
