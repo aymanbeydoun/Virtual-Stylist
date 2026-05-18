@@ -2,6 +2,7 @@ import asyncio
 import json
 from pathlib import Path
 
+import pytest
 from PIL import Image
 from tools.eval.run_eval import run
 
@@ -11,7 +12,22 @@ def _make_image(path: Path) -> None:
     Image.new("RGB", (32, 32), color=(50, 50, 100)).save(path, "JPEG")
 
 
-def test_eval_harness_runs(tmp_path: Path) -> None:
+def _force_stub(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Eval tests must score the deterministic stub, never burn real API credits.
+    Reset Settings + gateway singletons so the env override actually applies.
+    """
+    from app.config import get_settings
+    from app.services.model_gateway import _reset_gateway_for_tests
+
+    monkeypatch.setenv("MODEL_GATEWAY_BACKEND", "stub")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    monkeypatch.setenv("REPLICATE_API_TOKEN", "")
+    get_settings.cache_clear()
+    _reset_gateway_for_tests()
+
+
+def test_eval_harness_runs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _force_stub(monkeypatch)
     img = tmp_path / "images" / "x.jpg"
     _make_image(img)
     dataset = tmp_path / "ds.jsonl"

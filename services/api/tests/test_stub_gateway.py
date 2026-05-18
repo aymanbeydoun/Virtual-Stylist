@@ -17,6 +17,20 @@ async def test_stub_tag_item_returns_full_payload() -> None:
 
 
 @pytest.mark.asyncio
+async def test_stub_classify_clothing_always_accepts() -> None:
+    """Stub gateway must fail-open so offline dev + tests aren't blocked.
+
+    Production gateway runs the real Haiku classification; the stub trusts the
+    upload and lets the rest of the pipeline run.
+    """
+    gw = StubGateway()
+    result = await gw.classify_clothing(b"anything")
+    assert result.is_clothing is True
+    assert result.confidence == 1.0
+    assert result.reason is None
+
+
+@pytest.mark.asyncio
 async def test_stub_stylist_composes_outfits_with_required_slots() -> None:
     gw = StubGateway()
     candidates = [

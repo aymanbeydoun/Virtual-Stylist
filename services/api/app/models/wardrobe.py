@@ -52,7 +52,23 @@ class WardrobeItem(Base):
     needs_review: Mapped[bool] = mapped_column(Boolean, default=False)
     coppa_protected: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # Deep attribute bag — neckline, sleeve_length, fabric, fit, pattern_subtype,
+    # embellishments, weight_class, waist_rise, hem_length, etc.
+    # JSONB so we can evolve the taxonomy without migrations.
+    attributes: Mapped[dict[str, object]] = mapped_column(
+        PydanticJSON(dict[str, object]), default=dict
+    )
+
+    # Quality tier for the bg-removal pipeline.
+    #   'standard' = 851-labs/background-remover (fast, ~$0.005)
+    #   'premium'  = chenxwh/sapiens or matting refinement chain (slow, ~$0.05)
+    # Items with hair / models / transparent accessories should be upgraded.
+    quality_tier: Mapped[str] = mapped_column(String(16), default="standard")
+
     status: Mapped[str] = mapped_column(String(20), default="pending")
+    # Human-readable reason populated when status='failed' — surfaced on the
+    # mobile so the user knows what to fix.
+    failure_reason: Mapped[str | None] = mapped_column(Text)
 
     created_at: Mapped[datetime] = created_at_col()
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

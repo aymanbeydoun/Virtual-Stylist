@@ -12,9 +12,22 @@ from PIL import Image
 
 
 def _solid_jpeg(hex_color: str) -> bytes:
+    """Generate a synthetic test JPEG that passes preflight_check.
+
+    Preflight rejects images below 256x256 or with Laplacian variance under
+    60 (too blurry). A purely solid color has variance 0, so we lay a faint
+    pseudo-random noise pattern over the base colour — variance > 60, but
+    visually still recognisable as the colour, and deterministic per seed.
+    """
+    import numpy as np
+
     rgb = tuple(int(hex_color.lstrip("#")[i : i + 2], 16) for i in (0, 2, 4))
+    rng = np.random.default_rng(seed=hash(hex_color) & 0xFFFFFFFF)
+    noise = rng.integers(-30, 30, size=(256, 256, 3), dtype=np.int16)
+    base = np.array(rgb, dtype=np.int16)[None, None, :]
+    arr = np.clip(base + noise, 0, 255).astype(np.uint8)
     buf = io.BytesIO()
-    Image.new("RGB", (64, 64), color=rgb).save(buf, "JPEG")
+    Image.fromarray(arr, mode="RGB").save(buf, "JPEG", quality=85)
     return buf.getvalue()
 
 

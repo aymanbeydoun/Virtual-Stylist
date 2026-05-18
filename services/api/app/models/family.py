@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, SmallInteger, String
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, created_at_col
@@ -34,6 +34,10 @@ class FamilyMember(Base):
     )
     birth_year: Mapped[int | None] = mapped_column(SmallInteger)
     kid_mode: Mapped[bool] = mapped_column(Boolean, default=True)
+    base_photo_key: Mapped[str | None] = mapped_column(String(512))
+    base_photo_keys: Mapped[dict[str, str]] = mapped_column(
+        JSONB(none_as_null=True), default=dict, server_default="{}"
+    )
 
     created_at: Mapped[datetime] = created_at_col()
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
   },
   kindChipActive: { backgroundColor: palette.accent },
   kindText: { color: palette.text, textTransform: "capitalize" },
-  kindTextActive: { color: palette.background, fontWeight: "700" },
+  kindTextActive: { color: palette.onAccent, fontWeight: "700" },
   consent: {
     flexDirection: "row",
     alignItems: "center",
@@ -138,6 +138,6 @@ const styles = StyleSheet.create({
     marginTop: spacing(8),
   },
   submitDisabled: { opacity: 0.4 },
-  submitText: { color: palette.background, fontWeight: "700", fontSize: 16 },
+  submitText: { color: palette.onAccent, fontWeight: "700", fontSize: 16 },
   error: { color: palette.danger, marginTop: spacing(4) },
 });

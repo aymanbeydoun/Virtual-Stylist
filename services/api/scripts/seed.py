@@ -122,7 +122,11 @@ async def seed() -> None:
             )
             await db.flush()
 
-        async def add_closet(owner_kind: OwnerKind, owner_id: uuid.UUID, closet: list) -> int:
+        async def add_closet(
+            owner_kind: OwnerKind,
+            owner_id: uuid.UUID,
+            closet: list[tuple[str, Pattern, str, str, int, list[str]]],
+        ) -> int:
             existing = (
                 await db.execute(
                     select(WardrobeItem).where(

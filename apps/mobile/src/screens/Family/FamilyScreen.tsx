@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useQuery } from "@tanstack/react-query";
@@ -5,9 +6,19 @@ import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { familyApi } from "@/api/family";
+import type { FamilyMemberKind } from "@/api/types";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useActiveProfile } from "@/state/profile";
 import { palette, radii, spacing } from "@/theme";
+
+type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
+
+const KIND_ICON: Record<FamilyMemberKind | "guardian", IoniconName> = {
+  guardian: "person-outline",
+  adult: "person-outline",
+  teen: "person-outline",
+  kid: "happy-outline",
+};
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -32,7 +43,9 @@ export function FamilyScreen() {
         style={[styles.row, profile.ownerKind === "user" && styles.rowActive]}
         onPress={() => profile.reset()}
       >
-        <Text style={styles.rowAvatar}>👤</Text>
+        <View style={styles.rowAvatar}>
+          <Ionicons name={KIND_ICON.guardian} size={22} color={palette.text} />
+        </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.rowName}>You</Text>
           <Text style={styles.rowKind}>Guardian</Text>
@@ -50,7 +63,9 @@ export function FamilyScreen() {
               style={[styles.row, active && styles.rowActive]}
               onPress={() => profile.setFamilyMember(item)}
             >
-              <Text style={styles.rowAvatar}>{item.kind === "kid" ? "🧒" : item.kind === "teen" ? "🧑" : "👤"}</Text>
+              <View style={styles.rowAvatar}>
+                <Ionicons name={KIND_ICON[item.kind]} size={22} color={palette.text} />
+              </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowName}>{item.display_name}</Text>
                 <Text style={styles.rowKind}>
@@ -90,7 +105,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing(2),
     borderRadius: radii.pill,
   },
-  addButtonText: { color: palette.background, fontWeight: "700" },
+  addButtonText: { color: palette.onAccent, fontWeight: "700" },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -101,7 +116,15 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
   },
   rowActive: { borderWidth: 1, borderColor: palette.accent },
-  rowAvatar: { fontSize: 28, marginRight: spacing(4) },
+  rowAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: palette.surfaceAlt,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacing(4),
+  },
   rowName: { color: palette.text, fontWeight: "600", fontSize: 16 },
   rowKind: { color: palette.textMuted, fontSize: 12, textTransform: "capitalize" },
   dot: { color: palette.accent, fontSize: 30 },

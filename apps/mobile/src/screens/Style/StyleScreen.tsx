@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useMutation } from "@tanstack/react-query";
@@ -7,7 +8,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { stylistApi } from "@/api/stylist";
-import type { Destination, Mood, Outfit } from "@/api/types";
+import type { Destination, Mood, Outfit, Style } from "@/api/types";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useActiveProfile } from "@/state/profile";
 import { palette, radii, spacing } from "@/theme";
@@ -18,9 +19,15 @@ const baseUrl = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const ADULT_DESTINATIONS: { id: Destination; label: string }[] = [
   { id: "office", label: "Office" },
+  { id: "mall", label: "Mall" },
   { id: "date", label: "Date" },
+  { id: "restaurant", label: "Restaurant" },
   { id: "brunch", label: "Brunch" },
+  { id: "wedding", label: "Wedding" },
+  { id: "religious", label: "Religious" },
   { id: "casual", label: "Casual" },
+  { id: "park", label: "Park" },
+  { id: "beach", label: "Beach" },
   { id: "gym", label: "Gym" },
   { id: "travel", label: "Travel" },
   { id: "formal_event", label: "Formal" },
@@ -29,6 +36,9 @@ const ADULT_DESTINATIONS: { id: Destination; label: string }[] = [
 const KID_DESTINATIONS: { id: Destination; label: string }[] = [
   { id: "school", label: "School" },
   { id: "playground", label: "Playground" },
+  { id: "park", label: "Park" },
+  { id: "beach", label: "Beach" },
+  { id: "mall", label: "Mall" },
   { id: "casual", label: "Just hanging out" },
 ];
 
@@ -47,14 +57,33 @@ const KID_MOODS: { id: Mood; label: string }[] = [
   { id: "confident", label: "Hero 🦸" },
 ];
 
+const STYLES: { id: Style; label: string }[] = [
+  { id: "streetwear", label: "Streetwear" },
+  { id: "minimal", label: "Minimal" },
+  { id: "classic", label: "Classic" },
+  { id: "smart_casual", label: "Smart casual" },
+  { id: "preppy", label: "Preppy" },
+  { id: "athleisure", label: "Athleisure" },
+  { id: "bohemian", label: "Bohemian" },
+  { id: "avant_garde", label: "Avant-garde" },
+];
+
+const KID_STYLES: { id: Style; label: string }[] = [
+  { id: "streetwear", label: "Streetwear 🛹" },
+  { id: "athleisure", label: "Sporty ⚽" },
+  { id: "classic", label: "Smart 🎒" },
+];
+
 export function StyleScreen() {
   const nav = useNavigation<Nav>();
   const profile = useActiveProfile();
   const [destination, setDestination] = useState<Destination | null>(null);
   const [mood, setMood] = useState<Mood | null>(null);
+  const [style, setStyle] = useState<Style | null>(null);
 
   const destinations = profile.isKidMode ? KID_DESTINATIONS : ADULT_DESTINATIONS;
   const moods = profile.isKidMode ? KID_MOODS : MOODS;
+  const styles_ = profile.isKidMode ? KID_STYLES : STYLES;
   const accent = profile.isKidMode ? palette.kidPrimary : palette.accent;
 
   const generate = useMutation({
@@ -62,7 +91,10 @@ export function StyleScreen() {
       stylistApi.generate(
         { kind: profile.ownerKind, id: profile.ownerId ?? undefined },
         destination!,
-        mood!,
+        {
+          mood: mood ?? undefined,
+          style: style ?? undefined,
+        },
       ),
   });
 
@@ -89,7 +121,9 @@ export function StyleScreen() {
           ))}
         </View>
 
-        <Text style={styles.section}>How do you feel?</Text>
+        <Text style={styles.section}>
+          How do you feel? <Text style={styles.sectionOptional}>(optional)</Text>
+        </Text>
         <View style={styles.chips}>
           {moods.map((m) => (
             <Chip
@@ -97,22 +131,40 @@ export function StyleScreen() {
               label={m.label}
               active={mood === m.id}
               accent={accent}
-              onPress={() => setMood(m.id)}
+              onPress={() => setMood(mood === m.id ? null : m.id)}
+            />
+          ))}
+        </View>
+
+        <Text style={styles.section}>
+          Style <Text style={styles.sectionOptional}>(optional)</Text>
+        </Text>
+        <View style={styles.chips}>
+          {styles_.map((s) => (
+            <Chip
+              key={s.id}
+              label={s.label}
+              active={style === s.id}
+              accent={accent}
+              onPress={() => setStyle(style === s.id ? null : s.id)}
             />
           ))}
         </View>
 
         <Pressable
-          style={[styles.cta, { backgroundColor: accent }, (!destination || !mood) && { opacity: 0.4 }]}
-          disabled={!destination || !mood || generate.isPending}
+          style={[styles.cta, { backgroundColor: accent }, !destination && { opacity: 0.4 }]}
+          disabled={!destination || generate.isPending}
           onPress={() => generate.mutate()}
         >
           {generate.isPending ? (
-            <ActivityIndicator color={palette.background} />
+            <ActivityIndicator color={palette.onAccent} />
           ) : (
-            <Text style={styles.ctaText}>
-              {profile.isKidMode ? "Style my mission ✨" : "Style me"}
-            </Text>
+            <View style={styles.ctaRow}>
+              <Ionicons name="sparkles-outline" size={18} color={palette.onAccent} />
+              <Text style={styles.ctaText}>
+                {profile.isKidMode ? "Style my mission" : "Style me"}
+              </Text>
+            </View>
           )}
         </Pressable>
 
@@ -121,9 +173,12 @@ export function StyleScreen() {
         )}
 
         {generate.data?.weather && (
-          <Text style={styles.weather}>
-            🌤  {generate.data.weather.temp_c.toFixed(0)}°C · {generate.data.weather.condition}
-          </Text>
+          <View style={styles.weatherRow}>
+            <Ionicons name="partly-sunny-outline" size={16} color={palette.textMuted} />
+            <Text style={styles.weather}>
+              {generate.data.weather.temp_c.toFixed(0)}°C · {generate.data.weather.condition}
+            </Text>
+          </View>
         )}
 
         {outfits.length === 0 && generate.isSuccess && (
@@ -156,7 +211,7 @@ function Chip({
       style={[styles.chip, active && { backgroundColor: accent, borderColor: accent }]}
       onPress={onPress}
     >
-      <Text style={[styles.chipText, active && { color: palette.background, fontWeight: "700" }]}>
+      <Text style={[styles.chipText, active && { color: palette.onAccent, fontWeight: "700" }]}>
         {label}
       </Text>
     </Pressable>
@@ -172,22 +227,34 @@ function OutfitCard({ outfit, index, onOpen }: { outfit: Outfit; index: number; 
           <Text style={styles.outfitConfidence}>{Math.round(outfit.confidence * 100)}% match</Text>
         )}
       </View>
-      <View style={styles.outfitItems}>
-        {outfit.items.map((oi) => (
-          <View key={oi.item.id} style={styles.outfitItem}>
-            {oi.item.thumbnail_key ? (
-              <Image
-                source={{ uri: `${baseUrl}/api/v1/wardrobe/_local_read/${oi.item.thumbnail_key}` }}
-                style={styles.outfitThumb}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={[styles.outfitThumb, { backgroundColor: palette.surfaceAlt }]} />
-            )}
-            <Text style={styles.outfitSlot}>{oi.slot}</Text>
-          </View>
-        ))}
-      </View>
+      {outfit.composite_image_key ? (
+        <Image
+          source={{
+            uri: `${baseUrl}/api/v1/wardrobe/_local_read/${outfit.composite_image_key}?v=${encodeURIComponent(outfit.created_at)}`,
+          }}
+          style={styles.composite}
+          contentFit="cover"
+        />
+      ) : (
+        <View style={styles.outfitItems}>
+          {outfit.items.map((oi) => (
+            <View key={oi.item.id} style={styles.outfitItem}>
+              {oi.item.thumbnail_key ? (
+                <Image
+                  source={{
+                    uri: `${baseUrl}/api/v1/wardrobe/_local_read/${oi.item.thumbnail_key}?v=${encodeURIComponent(oi.item.created_at)}`,
+                  }}
+                  style={styles.outfitThumb}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={[styles.outfitThumb, { backgroundColor: palette.surfaceAlt }]} />
+              )}
+              <Text style={styles.outfitSlot}>{oi.slot}</Text>
+            </View>
+          ))}
+        </View>
+      )}
       {outfit.rationale && <Text style={styles.outfitRationale}>{outfit.rationale}</Text>}
     </Pressable>
   );
@@ -198,6 +265,7 @@ const styles = StyleSheet.create({
   eyebrow: { color: palette.textMuted, fontSize: 12, letterSpacing: 1, textTransform: "uppercase" },
   title: { color: palette.text, fontSize: 28, fontWeight: "700", marginTop: 4 },
   section: { color: palette.text, fontSize: 16, fontWeight: "600", marginTop: spacing(6), marginBottom: spacing(3) },
+  sectionOptional: { color: palette.textMuted, fontSize: 13, fontWeight: "400" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing(2) },
   chip: {
     paddingHorizontal: spacing(4),
@@ -209,8 +277,15 @@ const styles = StyleSheet.create({
   },
   chipText: { color: palette.text },
   cta: { padding: spacing(4), borderRadius: radii.md, alignItems: "center", marginTop: spacing(8) },
-  ctaText: { color: palette.background, fontWeight: "700", fontSize: 16 },
-  weather: { color: palette.textMuted, marginTop: spacing(5) },
+  ctaRow: { flexDirection: "row", alignItems: "center", gap: spacing(2) },
+  ctaText: { color: palette.onAccent, fontWeight: "700", fontSize: 16 },
+  weatherRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing(2),
+    marginTop: spacing(5),
+  },
+  weather: { color: palette.textMuted },
   outfit: {
     backgroundColor: palette.surface,
     padding: spacing(4),
@@ -223,6 +298,7 @@ const styles = StyleSheet.create({
   outfitItems: { flexDirection: "row", gap: spacing(2) },
   outfitItem: { alignItems: "center", flex: 1 },
   outfitThumb: { width: "100%", aspectRatio: 1, borderRadius: radii.md, backgroundColor: palette.surfaceAlt },
+  composite: { width: "100%", aspectRatio: 1, borderRadius: radii.md, backgroundColor: palette.surfaceAlt },
   outfitSlot: { color: palette.textMuted, fontSize: 11, marginTop: 4, textTransform: "capitalize" },
   outfitRationale: { color: palette.textMuted, marginTop: spacing(3), fontStyle: "italic" },
   empty: { color: palette.textMuted, marginTop: spacing(6), textAlign: "center" },
