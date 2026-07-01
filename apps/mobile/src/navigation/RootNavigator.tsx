@@ -13,6 +13,8 @@ import { AddMemberScreen } from "@/screens/Family/AddMemberScreen";
 import { SignInScreen } from "@/screens/Auth/SignInScreen";
 import { StyleScreen } from "@/screens/Style/StyleScreen";
 import { OutfitDetailScreen } from "@/screens/Style/OutfitDetailScreen";
+import { StatusScreen } from "@/screens/Status/StatusScreen";
+import { StylistChatScreen } from "@/screens/Chat/StylistChatScreen";
 import { YouScreen } from "@/screens/You/YouScreen";
 
 export type RootStackParamList = {
@@ -21,6 +23,8 @@ export type RootStackParamList = {
   ItemDetail: { itemId: string };
   AddMember: undefined;
   OutfitDetail: { outfitId: string };
+  Status: undefined;
+  StylistChat: { outfitId?: string; context?: string };
   SignIn: undefined;
 };
 
@@ -91,6 +95,16 @@ export function RootNavigator() {
             name="OutfitDetail"
             component={OutfitDetailScreen}
             options={{ title: "Outfit" }}
+          />
+          <Stack.Screen
+            name="Status"
+            component={StatusScreen}
+            options={{ title: "Status" }}
+          />
+          <Stack.Screen
+            name="StylistChat"
+            component={StylistChatScreen}
+            options={{ title: "Chat" }}
           />
         </>
       )}
