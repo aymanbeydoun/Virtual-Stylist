@@ -178,20 +178,77 @@ function TypingBubble({ aiName }: { aiName: string }) {
  * Local response generator. Reacts to the first message as an answer to
  * "how was your day?", then to keywords describing an outfit edit.
  */
+/** Classify how the user's day sounds: good, bad, or neutral. */
+function detectMood(t: string): "good" | "bad" | "neutral" {
+  if (/\bnot bad\b/.test(t)) return "good";
+  if (/(not good|not great|not ok|not okay|isn't good|isn't great)/.test(t)) return "bad";
+  if (
+    /(bad|terrible|awful|rough|tired|exhaust|sad|stress|hard|lonely|down|depress|horrible|sick|angry|upset|crap|rubbish|meh|worst|not feeling|unwell|anxious)/.test(
+      t,
+    )
+  ) {
+    return "bad";
+  }
+  if (
+    /(good|great|amazing|awesome|fantastic|wonderful|happy|excited|nice|fine|okay|\bok\b|\bwell\b|perfect|excellent|lovely|chill|relaxed|brilliant|blessed)/.test(
+      t,
+    )
+  ) {
+    return "good";
+  }
+  return "neutral";
+}
+
+/** Did the user turn a question back on Stella (e.g. "how about you?"). */
+function asksAboutStella(t: string): boolean {
+  return /(how about you|what about you|how are you|how're you|how r u|hbu|wbu|and you\b|you\?|your day|hows it going|how's it going)/.test(
+    t,
+  );
+}
+
 function generateReply(
   text: string,
   opts: { wasAboutDay: boolean; context?: string },
 ): string[] {
   const t = text.toLowerCase();
+  const mood = detectMood(t);
+  const asksBack = asksAboutStella(t);
 
+  // First message = the user's answer to "how was your day?"
   if (opts.wasAboutDay) {
-    const rough = /(bad|tired|rough|sad|stress|awful|hard|lonely|down)/.test(t);
-    const opener = rough
-      ? "I'm really sorry it's been one of those days. I've got you — let's make getting dressed the easy part. 💛"
-      : "Love hearing that! Let's channel that energy into your look. 🙌";
-    return [
-      opener,
+    const parts: string[] = [];
+    if (mood === "bad") {
+      parts.push(
+        "Aw, I'm really sorry it's been a rough one. 💛 I've got you — let's make getting dressed the easy, happy part of your day.",
+      );
+    } else if (mood === "good") {
+      parts.push("Ahh, love hearing that! 🙌");
+    } else {
+      parts.push("Thanks for telling me — I'm really glad you're here. 💫");
+    }
+    // If they asked me back (e.g. "how about you?"), actually answer it.
+    if (asksBack) {
+      parts.push(
+        "Me? I'm having a lovely day dreaming up outfits — thanks so much for asking! 😊",
+      );
+    }
+    parts.push(
       "So — anything you'd change about today's outfit? Tell me what's not clicking (a colour, the shirt, the vibe) and I'll rework it.",
+    );
+    return parts;
+  }
+
+  // Any time: if they turn a question on me, answer it instead of ignoring it.
+  if (asksBack) {
+    return [
+      "I'm doing great, thanks for asking — that's kind of you! 😊 Now, want to tweak anything about your look?",
+    ];
+  }
+
+  // Any time: if they mention a bad mood, be supportive — never "love hearing that".
+  if (mood === "bad") {
+    return [
+      "Aw, I'm sorry to hear that. 💛 Let's make your outfit one less thing to think about — want me to keep it comfy and low-key today?",
     ];
   }
 
