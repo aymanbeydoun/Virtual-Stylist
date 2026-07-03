@@ -12,24 +12,25 @@ export function SignInScreen() {
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.inner}>
-        <Text style={styles.title}>Virtual Stylist</Text>
+        <Text style={styles.title}>Staile Me</Text>
         <Text style={styles.subtitle}>
-          Sign in (dev mode). In production this is Auth0 / passkey.
+          Your personal AI stylist is ready! ✨ Pop in your name and let&apos;s
+          create outfits you&apos;ll absolutely love!
         </Text>
         <TextInput
           style={styles.input}
-          placeholder="Your name or any dev ID"
+          placeholder="Your name"
           placeholderTextColor={palette.textMuted}
           value={value}
           onChangeText={setValue}
-          autoCapitalize="none"
+          autoCapitalize="words"
         />
         <Pressable
           style={[styles.button, !value && styles.buttonDisabled]}
           disabled={!value}
           onPress={() => signIn(value.trim())}
         >
-          <Text style={styles.buttonText}>Continue</Text>
+          <Text style={styles.buttonText}>Let&apos;s go! 🎉</Text>
         </Pressable>
       </View>
     </SafeAreaView>

@@ -58,7 +58,7 @@ export function StyleScreen() {
       <ScrollView contentContainerStyle={{ padding: spacing(5) }}>
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.eyebrow}>Stail Me</Text>
+            <Text style={styles.eyebrow}>Staile Me</Text>
             <Text style={styles.title}>
               {profile.isKidMode ? `Hey ${profile.ownerLabel}!` : "What's the move?"}
             </Text>
