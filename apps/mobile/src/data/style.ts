@@ -23,7 +23,7 @@ export interface OccasionOption {
 
 export const VIBES: VibeOption[] = [
   { id: "chill", label: "Chill", emoji: "😌", mood: "cozy" },
-  { id: "loud", label: "Loud", emoji: "🔊", mood: "confident" },
+  { id: "energetic", label: "Energetic", emoji: "🔥", mood: "confident" },
   { id: "classy", label: "Classy", emoji: "🕶️", mood: "minimal" },
   { id: "romantic", label: "Romantic", emoji: "💕", mood: "romantic" },
   { id: "bold", label: "Bold", emoji: "⚡", mood: "edgy" },
