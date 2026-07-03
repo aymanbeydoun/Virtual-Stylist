@@ -1,3 +1,4 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -30,11 +31,11 @@ export function StatusScreen() {
           </Text>
 
           <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${progress * 100}%`, backgroundColor: current.color },
-              ]}
+            <LinearGradient
+              colors={[current.color, upcoming ? upcoming.color : current.color]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[styles.progressFill, { width: `${progress * 100}%` }]}
             />
           </View>
           <Text style={styles.progressLabel}>
