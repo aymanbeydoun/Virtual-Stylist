@@ -1,15 +1,12 @@
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { useMutation } from "@tanstack/react-query";
-import { Image } from "expo-image";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { stylistApi } from "@/api/stylist";
-import type { Outfit } from "@/api/types";
 import { LevelBadge } from "@/components/LevelBadge";
 import { RenameStylistModal } from "@/components/RenameStylistModal";
+import type { DemoItem } from "@/data/demoCloset";
 import { RATINGS } from "@/data/ratings";
 import {
   KID_OCCASIONS,
@@ -19,14 +16,13 @@ import {
   type OccasionOption,
   type VibeOption,
 } from "@/data/style";
+import { stailMe, type DemoOutfit } from "@/demo/stylist";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useActiveProfile } from "@/state/profile";
 import { useStylist } from "@/state/stylist";
 import { palette, radii, spacing } from "@/theme";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-
-const baseUrl = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export function StyleScreen() {
   const nav = useNavigation<Nav>();
@@ -35,23 +31,24 @@ export function StyleScreen() {
   const [vibe, setVibe] = useState<VibeOption | null>(null);
   const [occasion, setOccasion] = useState<OccasionOption | null>(null);
   const [renameOpen, setRenameOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [outfits, setOutfits] = useState<DemoOutfit[] | null>(null);
 
   const vibes = profile.isKidMode ? KID_VIBES : VIBES;
   const occasions = profile.isKidMode ? KID_OCCASIONS : OCCASIONS;
   const accent = profile.isKidMode ? palette.kidPrimary : palette.accent;
-
-  const generate = useMutation({
-    mutationFn: () =>
-      stylistApi.generate(
-        { kind: profile.ownerKind, id: profile.ownerId ?? undefined },
-        occasion!.destination,
-        vibe!.mood,
-        `Vibe: ${vibe!.label}. Occasion: ${occasion!.label}.`,
-      ),
-  });
-
-  const outfits = generate.data?.outfits ?? [];
   const ready = Boolean(vibe && occasion);
+
+  const onStaileMe = () => {
+    if (!vibe || !occasion) return;
+    setLoading(true);
+    setOutfits(null);
+    // Small "thinking" beat so it feels like the stylist is working.
+    setTimeout(() => {
+      setOutfits(stailMe(vibe.label, occasion.label));
+      setLoading(false);
+    }, 700);
+  };
 
   return (
     <SafeAreaView style={styles.root}>
@@ -94,10 +91,10 @@ export function StyleScreen() {
 
         <Pressable
           style={[styles.cta, { backgroundColor: accent }, !ready && { opacity: 0.4 }]}
-          disabled={!ready || generate.isPending}
-          onPress={() => generate.mutate()}
+          disabled={!ready || loading}
+          onPress={onStaileMe}
         >
-          {generate.isPending ? (
+          {loading ? (
             <ActivityIndicator color={palette.background} />
           ) : (
             <Text style={styles.ctaText}>
@@ -106,25 +103,11 @@ export function StyleScreen() {
           )}
         </Pressable>
 
-        {generate.isError && (
-          <Text style={styles.error}>
-            Couldn&apos;t generate outfits: {(generate.error as Error).message}
-          </Text>
+        {loading && (
+          <Text style={styles.thinking}>{aiName} is putting looks together… 🧵</Text>
         )}
 
-        {generate.data?.weather && (
-          <Text style={styles.weather}>
-            🌤  {generate.data.weather.temp_c.toFixed(0)}°C · {generate.data.weather.condition}
-          </Text>
-        )}
-
-        {outfits.length === 0 && generate.isSuccess && (
-          <Text style={styles.empty}>
-            No combinations found. Try adding more items to the closet.
-          </Text>
-        )}
-
-        {outfits.map((o, idx) => (
+        {outfits?.map((o, idx) => (
           <OutfitCard
             key={o.id}
             outfit={o}
@@ -132,7 +115,6 @@ export function StyleScreen() {
             aiName={aiName}
             accent={accent}
             onEditName={() => setRenameOpen(true)}
-            onOpen={() => nav.navigate("OutfitDetail", { outfitId: o.id })}
             onChat={() =>
               nav.navigate("StylistChat", {
                 outfitId: o.id,
@@ -182,52 +164,37 @@ function OutfitCard({
   index,
   aiName,
   accent,
-  onOpen,
   onChat,
   onEditName,
 }: {
-  outfit: Outfit;
+  outfit: DemoOutfit;
   index: number;
   aiName: string;
   accent: string;
-  onOpen: () => void;
   onChat: () => void;
   onEditName: () => void;
 }) {
   const [rating, setRating] = useState<number | null>(null);
 
-  const onRate = (value: number) => {
-    setRating(value);
-    // Feed the choice back to the backend so the stylist learns preferences.
-    stylistApi.recordEvent(outfit.id, value >= 4 ? "saved" : "skipped").catch(() => {});
-  };
-
   return (
     <View style={styles.outfit}>
-      <Pressable onPress={onOpen}>
-        <View style={styles.outfitHeader}>
-          <Text style={styles.outfitTitle}>Outfit {index + 1}</Text>
-          {outfit.confidence !== null && (
-            <Text style={styles.outfitConfidence}>{Math.round(outfit.confidence * 100)}% match</Text>
-          )}
-        </View>
-        <View style={styles.outfitItems}>
-          {outfit.items.map((oi) => (
-            <View key={oi.item.id} style={styles.outfitItem}>
-              {oi.item.thumbnail_key ? (
-                <Image
-                  source={{ uri: `${baseUrl}/api/v1/wardrobe/_local_read/${oi.item.thumbnail_key}` }}
-                  style={styles.outfitThumb}
-                  contentFit="cover"
-                />
-              ) : (
-                <View style={[styles.outfitThumb, { backgroundColor: palette.surfaceAlt }]} />
-              )}
-              <Text style={styles.outfitSlot}>{oi.slot}</Text>
+      <View style={styles.outfitHeader}>
+        <Text style={styles.outfitTitle}>Outfit {index + 1}</Text>
+        <Text style={styles.outfitConfidence}>{Math.round(outfit.confidence * 100)}% match</Text>
+      </View>
+
+      <View style={styles.outfitItems}>
+        {outfit.items.map((item: DemoItem) => (
+          <View key={item.id} style={styles.outfitItem}>
+            <View style={[styles.outfitThumb, { backgroundColor: item.color }]}>
+              <Text style={styles.outfitThumbEmoji}>{item.emoji}</Text>
             </View>
-          ))}
-        </View>
-      </Pressable>
+            <Text style={styles.outfitSlot} numberOfLines={1}>
+              {item.name}
+            </Text>
+          </View>
+        ))}
+      </View>
 
       {/* Rate the AI's choice */}
       <Text style={styles.rateLabel}>How do you like it?</Text>
@@ -235,7 +202,7 @@ function OutfitCard({
         {RATINGS.map((r) => (
           <Pressable
             key={r.value}
-            onPress={() => onRate(r.value)}
+            onPress={() => setRating(r.value)}
             style={[styles.rating, rating === r.value && { backgroundColor: accent }]}
             accessibilityLabel={r.label}
           >
@@ -245,12 +212,10 @@ function OutfitCard({
       </View>
 
       {/* AI's rationale */}
-      {outfit.rationale && (
-        <Text style={styles.rationale}>
-          <Text style={[styles.rationaleName, { color: accent }]}>{aiName}&apos;s choice: </Text>
-          {outfit.rationale}
-        </Text>
-      )}
+      <Text style={styles.rationale}>
+        <Text style={[styles.rationaleName, { color: accent }]}>{aiName}&apos;s choice: </Text>
+        {outfit.rationale}
+      </Text>
 
       {/* Chat + rename */}
       <View style={styles.chatRow}>
@@ -287,7 +252,7 @@ const styles = StyleSheet.create({
   chipText: { color: palette.text },
   cta: { padding: spacing(4), borderRadius: radii.md, alignItems: "center", marginTop: spacing(8) },
   ctaText: { color: palette.background, fontWeight: "700", fontSize: 16 },
-  weather: { color: palette.textMuted, marginTop: spacing(5) },
+  thinking: { color: palette.textMuted, textAlign: "center", marginTop: spacing(4) },
   outfit: {
     backgroundColor: palette.surface,
     padding: spacing(4),
@@ -299,8 +264,15 @@ const styles = StyleSheet.create({
   outfitConfidence: { color: palette.textMuted, fontSize: 12 },
   outfitItems: { flexDirection: "row", gap: spacing(2) },
   outfitItem: { alignItems: "center", flex: 1 },
-  outfitThumb: { width: "100%", aspectRatio: 1, borderRadius: radii.md, backgroundColor: palette.surfaceAlt },
-  outfitSlot: { color: palette.textMuted, fontSize: 11, marginTop: 4, textTransform: "capitalize" },
+  outfitThumb: {
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: radii.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  outfitThumbEmoji: { fontSize: 30 },
+  outfitSlot: { color: palette.textMuted, fontSize: 11, marginTop: 4, textAlign: "center" },
   rateLabel: { color: palette.textMuted, fontSize: 12, marginTop: spacing(4), marginBottom: spacing(2) },
   ratings: { flexDirection: "row", justifyContent: "space-between", gap: spacing(1) },
   rating: {
@@ -333,6 +305,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   penIcon: { fontSize: 18 },
-  empty: { color: palette.textMuted, marginTop: spacing(6), textAlign: "center" },
-  error: { color: palette.danger, marginTop: spacing(4) },
 });
