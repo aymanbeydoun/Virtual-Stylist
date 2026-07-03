@@ -20,23 +20,26 @@ export interface StyleLevel {
   emoji: string;
 }
 
+// Colours form one smooth sweep through the spectrum so adjacent levels are
+// always the closest shades: blue → cyan → green → lime → gold → orange →
+// red → pink → magenta → purple → violet.
 export const LEVELS: StyleLevel[] = [
-  { level: 1, title: "Style Rookie", timeReached: "1 Day", minDays: 1, color: "#94A3B8", emoji: "🌱" },
-  { level: 2, title: "Fit Explorer", timeReached: "1 Week", minDays: 7, color: "#38BDF8", emoji: "🧭" },
-  { level: 3, title: "Trend Seeker", timeReached: "1 Month", minDays: 30, color: "#22D3EE", emoji: "🔭" },
-  { level: 4, title: "Style Builder", timeReached: "2 Months", minDays: 60, color: "#2DD4BF", emoji: "🧱" },
-  { level: 5, title: "Outfit Architect", timeReached: "3 Months", minDays: 90, color: "#34D399", emoji: "📐" },
+  { level: 1, title: "Style Rookie", timeReached: "1 Day", minDays: 1, color: "#38BDF8", emoji: "🌱" },
+  { level: 2, title: "Fit Explorer", timeReached: "1 Week", minDays: 7, color: "#22D3EE", emoji: "🧭" },
+  { level: 3, title: "Trend Seeker", timeReached: "1 Month", minDays: 30, color: "#2DD4BF", emoji: "🔭" },
+  { level: 4, title: "Style Builder", timeReached: "2 Months", minDays: 60, color: "#34D399", emoji: "🧱" },
+  { level: 5, title: "Outfit Architect", timeReached: "3 Months", minDays: 90, color: "#4ADE80", emoji: "📐" },
   { level: 6, title: "Outfit Talent", timeReached: "4 Months", minDays: 120, color: "#A3E635", emoji: "🎯" },
   { level: 7, title: "Fashion Strategist", timeReached: "5 Months", minDays: 150, color: "#FACC15", emoji: "♟️" },
-  { level: 8, title: "Clothing Developer", timeReached: "6 Months", minDays: 180, color: "#FB923C", emoji: "🛠️" },
-  { level: 9, title: "Style Influencer", timeReached: "7 Months", minDays: 210, color: "#F87171", emoji: "📣" },
-  { level: 10, title: "Trend Controller", timeReached: "8 Months", minDays: 240, color: "#F472B6", emoji: "🎛️" },
-  { level: 11, title: "Luxury Mindset", timeReached: "9 Months", minDays: 270, color: "#E879F9", emoji: "💎" },
-  { level: 12, title: "Elite Stylist", timeReached: "10 Months", minDays: 300, color: "#C084FC", emoji: "👑" },
-  { level: 13, title: "Fashion Visionary", timeReached: "11 Months", minDays: 330, color: "#A78BFA", emoji: "🔮" },
-  { level: 14, title: "Cultural Trendsetter", timeReached: "12 Months", minDays: 360, color: "#818CF8", emoji: "🌍" },
-  { level: 15, title: "Fashion Immortal", timeReached: "1 Year", minDays: 365, color: "#FBBF24", emoji: "⭐" },
-  { level: 16, title: "Eternal Icon", timeReached: "1 Year+", minDays: 366, color: "#FF2D95", emoji: "🏆" },
+  { level: 8, title: "Clothing Developer", timeReached: "6 Months", minDays: 180, color: "#FBBF24", emoji: "🛠️" },
+  { level: 9, title: "Style Influencer", timeReached: "7 Months", minDays: 210, color: "#FB923C", emoji: "📣" },
+  { level: 10, title: "Trend Controller", timeReached: "8 Months", minDays: 240, color: "#F97316", emoji: "🎛️" },
+  { level: 11, title: "Luxury Mindset", timeReached: "9 Months", minDays: 270, color: "#F87171", emoji: "💎" },
+  { level: 12, title: "Elite Stylist", timeReached: "10 Months", minDays: 300, color: "#F43F5E", emoji: "👑" },
+  { level: 13, title: "Fashion Visionary", timeReached: "11 Months", minDays: 330, color: "#EC4899", emoji: "🔮" },
+  { level: 14, title: "Cultural Trendsetter", timeReached: "12 Months", minDays: 360, color: "#D946EF", emoji: "🌍" },
+  { level: 15, title: "Fashion Immortal", timeReached: "1 Year", minDays: 365, color: "#A855F7", emoji: "⭐" },
+  { level: 16, title: "Eternal Icon", timeReached: "1 Year+", minDays: 366, color: "#8B5CF6", emoji: "🏆" },
 ];
 
 /** The highest level whose `minDays` threshold the user has met. */

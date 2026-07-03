@@ -101,7 +101,7 @@ export function StyleScreen() {
             <ActivityIndicator color={palette.background} />
           ) : (
             <Text style={styles.ctaText}>
-              {profile.isKidMode ? "Style my mission ✨" : "Style me"}
+              {profile.isKidMode ? "Staile my mission ✨" : "Staile me"}
             </Text>
           )}
         </Pressable>
