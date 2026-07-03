@@ -68,7 +68,8 @@ export function StatusScreen() {
                   <View
                     style={[
                       styles.levelDot,
-                      { backgroundColor: reached ? lvl.color : palette.surfaceAlt },
+                      { backgroundColor: lvl.color },
+                      !reached && styles.levelDotLocked,
                     ]}
                   >
                     <Text style={styles.levelDotText}>{lvl.level}</Text>
@@ -77,10 +78,7 @@ export function StatusScreen() {
                 <Text style={[styles.colTime, styles.cellMuted]}>{lvl.timeReached}</Text>
                 <View style={styles.colTitle}>
                   <Text
-                    style={[
-                      styles.cellTitle,
-                      { color: reached ? lvl.color : palette.textMuted },
-                    ]}
+                    style={[styles.cellTitle, { color: lvl.color }, !reached && styles.cellLocked]}
                   >
                     {lvl.emoji} {lvl.title}
                   </Text>
@@ -169,9 +167,11 @@ const styles = StyleSheet.create({
   colTime: { width: 78 },
   colTitle: { flex: 1 },
   levelDot: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  levelDotLocked: { opacity: 0.5 },
   levelDotText: { color: palette.background, fontWeight: "800", fontSize: 13 },
   cellMuted: { color: palette.textMuted, fontSize: 13 },
   cellTitle: { fontWeight: "600", fontSize: 14 },
+  cellLocked: { opacity: 0.7 },
   youAreHere: { color: palette.textMuted, fontSize: 10, marginTop: 1 },
   lock: { width: 22, textAlign: "right", fontSize: 13, color: palette.textMuted },
   footnote: {
