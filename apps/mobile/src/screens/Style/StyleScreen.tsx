@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { personalizeRationales } from "@/ai/stylistBrain";
 import { ChatIcon, ChevronIcon, PenIcon } from "@/components/icons";
 import { LevelBadge } from "@/components/LevelBadge";
 import { OutfitCanvas } from "@/components/OutfitCanvas";
@@ -27,6 +28,7 @@ import {
 } from "@/data/style";
 import { stailMe, type DemoOutfit } from "@/demo/stylist";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
+import { aiBrainEnabled } from "@/state/aiBrain";
 import { useAura } from "@/state/aura";
 import { useActiveProfile } from "@/state/profile";
 import { useStylist } from "@/state/stylist";
@@ -65,8 +67,31 @@ export function StyleScreen() {
     // The canvas breathes into the vibe's aura while the stylist "thinks".
     setAura(auraForVibe(vibe.id));
     setTimeout(() => {
-      setOutfits(stailMe(vibe.label, occasion.label));
+      const looks = stailMe(vibe.label, occasion.label);
+      setOutfits(looks);
       setLoading(false);
+
+      // With the AI brain on, Stella writes personalised rationales; the
+      // built-in ones stay if the call fails or no key is saved.
+      if (aiBrainEnabled()) {
+        personalizeRationales({
+          aiName,
+          vibe: vibe.label,
+          occasion: occasion.label,
+          outfits: looks,
+        })
+          .then((rationales) => {
+            if (!rationales) return;
+            setOutfits((prev) =>
+              prev
+                ? prev.map((o, i) =>
+                    rationales[i] ? { ...o, rationale: rationales[i] } : o,
+                  )
+                : prev,
+            );
+          })
+          .catch(() => {});
+      }
     }, 700);
   };
 

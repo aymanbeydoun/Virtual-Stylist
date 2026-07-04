@@ -1,8 +1,10 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CheckIcon } from "@/components/icons";
+import { useAiBrain } from "@/state/aiBrain";
 import { useAura } from "@/state/aura";
 import { useAuth } from "@/state/auth";
 import { useActiveProfile } from "@/state/profile";
@@ -25,6 +27,10 @@ export function YouScreen() {
   const setBackground = useTheme((s) => s.setBackground);
   const accent = useAccent();
   const activeColor = accent.color;
+  const apiKey = useAiBrain((s) => s.apiKey);
+  const setApiKey = useAiBrain((s) => s.setApiKey);
+  const clearApiKey = useAiBrain((s) => s.clearApiKey);
+  const [keyDraft, setKeyDraft] = useState("");
 
   // Mirrors ThemeEngine's base stops exactly so previews match reality.
   const designStops = (d: BackgroundDesign): [string, string, ...string[]] =>
@@ -107,6 +113,65 @@ export function YouScreen() {
               );
             })}
           </View>
+        </View>
+
+        {/* Stella's real AI brain (Claude) */}
+        <View style={styles.panel}>
+          <View style={styles.brainHeader}>
+            <Text style={styles.section}>AI BRAIN</Text>
+            <View
+              style={[
+                styles.brainStatus,
+                { borderColor: apiKey ? palette.success : palette.hairline },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.brainStatusText,
+                  { color: apiKey ? palette.success : palette.textMuted },
+                ]}
+              >
+                {apiKey ? "CONNECTED" : "BUILT-IN MODE"}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.hint}>
+            {apiKey
+              ? "Stella is running on a real AI — chat and outfit reasoning are live."
+              : "Paste an Anthropic API key to give Stella a real AI brain. Ask a parent to create one at console.anthropic.com — it stays on this phone only."}
+          </Text>
+          {apiKey ? (
+            <Pressable style={styles.brainClear} onPress={() => clearApiKey()}>
+              <Text style={styles.brainClearText}>DISCONNECT</Text>
+            </Pressable>
+          ) : (
+            <View style={styles.brainRow}>
+              <TextInput
+                style={styles.brainInput}
+                placeholder="sk-ant-…"
+                placeholderTextColor={palette.textMuted}
+                value={keyDraft}
+                onChangeText={setKeyDraft}
+                autoCapitalize="none"
+                autoCorrect={false}
+                secureTextEntry
+              />
+              <Pressable
+                style={[
+                  styles.brainSave,
+                  { backgroundColor: activeColor },
+                  !keyDraft.trim() && { opacity: 0.35 },
+                ]}
+                disabled={!keyDraft.trim()}
+                onPress={() => {
+                  setApiKey(keyDraft);
+                  setKeyDraft("");
+                }}
+              >
+                <Text style={styles.brainSaveText}>SAVE</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
 
         <Pressable
@@ -200,6 +265,53 @@ const styles = StyleSheet.create({
     fontSize: 8.5,
     letterSpacing: 1.2,
     marginTop: spacing(1.5),
+  },
+  brainHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  brainStatus: {
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: spacing(2),
+    paddingVertical: 3,
+  },
+  brainStatusText: { fontFamily: fonts.mono, fontSize: 9, letterSpacing: 1.5 },
+  brainRow: { flexDirection: "row", gap: spacing(2) },
+  brainInput: {
+    ...glass,
+    flex: 1,
+    color: palette.text,
+    fontFamily: fonts.body,
+    fontSize: 13.5,
+    paddingHorizontal: spacing(3),
+    paddingVertical: spacing(2.5),
+    borderRadius: radii.sm,
+  },
+  brainSave: {
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing(4),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  brainSaveText: {
+    color: "#0A0B0E",
+    fontFamily: fonts.bodyBold,
+    fontSize: 11.5,
+    letterSpacing: 1.5,
+  },
+  brainClear: {
+    ...glass,
+    borderRadius: radii.sm,
+    paddingVertical: spacing(2.5),
+    alignItems: "center",
+  },
+  brainClearText: {
+    color: palette.danger,
+    fontFamily: fonts.bodyBold,
+    fontSize: 11.5,
+    letterSpacing: 1.5,
   },
   button: {
     padding: spacing(4),

@@ -12,9 +12,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { chatWithStella } from "@/ai/stylistBrain";
 import { SendIcon } from "@/components/icons";
 import { quoteForToday } from "@/data/quotes";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
+import { aiBrainEnabled } from "@/state/aiBrain";
 import { useStylist } from "@/state/stylist";
 import { useAccent } from "@/state/theme";
 import { fonts, palette, radii, spacing } from "@/theme";
@@ -75,16 +77,41 @@ export function StylistChatScreen() {
     return () => clearTimeout(t);
   }, [messages, typing]);
 
-  const send = () => {
+  const send = async () => {
     const text = input.trim();
     if (!text) return;
     setInput("");
-    setMessages((prev) => [...prev, { id: nextId(), from: "user", text }]);
+    const userMessage: Message = { id: nextId(), from: "user", text };
+    const history = [...messages, userMessage];
+    setMessages(history);
 
     const wasAboutDay = askedAboutDay.current;
     askedAboutDay.current = false;
 
     setTyping(true);
+
+    // Real AI brain first (when a key is saved in the You tab); the built-in
+    // reply engine is the always-works fallback.
+    if (aiBrainEnabled()) {
+      try {
+        const replies = await chatWithStella({
+          aiName,
+          context: route.params?.context,
+          history: history.map((m) => ({ from: m.from, text: m.text })),
+        });
+        if (replies && replies.length > 0) {
+          setTyping(false);
+          setMessages((prev) => [
+            ...prev,
+            ...replies.map((r) => ({ id: nextId(), from: "ai" as const, text: r })),
+          ]);
+          return;
+        }
+      } catch {
+        // Bad key, offline, rate limit — fall through to built-in replies.
+      }
+    }
+
     setTimeout(() => {
       setTyping(false);
       const replies = generateReply(text, {
