@@ -7,7 +7,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 import { wardrobeApi } from "@/api/wardrobe";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useActiveProfile } from "@/state/profile";
-import { palette, radii, spacing } from "@/theme";
+import { fonts, glass, palette, radii, spacing } from "@/theme";
 
 const baseUrl = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -50,7 +50,7 @@ export function ItemDetailScreen() {
       <Field label="Seasonality" value={it.seasonality.join(", ") || "—"} />
       <Field label="Colors" value={it.colors.map((c) => c.name).join(", ") || "—"} />
 
-      <Text style={styles.section}>Fix a tag</Text>
+      <Text style={styles.section}>FIX A TAG</Text>
       <TextInput
         style={styles.input}
         placeholder={`Correct category (current: ${it.category ?? "—"})`}
@@ -67,7 +67,7 @@ export function ItemDetailScreen() {
           setCategory("");
         }}
       >
-        <Text style={styles.buttonText}>Save correction</Text>
+        <Text style={styles.buttonText}>SAVE CORRECTION</Text>
       </Pressable>
     </ScrollView>
   );
@@ -84,7 +84,7 @@ function Field({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "transparent" },
-  loading: { color: palette.text, padding: spacing(6) },
+  loading: { color: palette.text, fontFamily: fonts.body, padding: spacing(6) },
   image: {
     width: "100%",
     aspectRatio: 1,
@@ -93,17 +93,41 @@ const styles = StyleSheet.create({
     marginBottom: spacing(5),
   },
   field: { marginBottom: spacing(4) },
-  fieldLabel: { color: palette.textMuted, fontSize: 12, textTransform: "uppercase", letterSpacing: 1 },
-  fieldValue: { color: palette.text, fontSize: 16, marginTop: 4 },
-  section: { color: palette.text, fontSize: 16, fontWeight: "600", marginTop: spacing(4) },
-  input: {
-    backgroundColor: palette.surface,
+  fieldLabel: {
+    color: palette.textMuted,
+    fontFamily: fonts.mono,
+    fontSize: 10,
+    textTransform: "uppercase",
+    letterSpacing: 1.8,
+  },
+  fieldValue: { color: palette.text, fontFamily: fonts.bodyMedium, fontSize: 15.5, marginTop: 4 },
+  section: {
     color: palette.text,
+    fontFamily: fonts.bodyBold,
+    fontSize: 13,
+    letterSpacing: 2,
+    marginTop: spacing(4),
+  },
+  input: {
+    ...glass,
+    color: palette.text,
+    fontFamily: fonts.body,
+    fontSize: 14.5,
     padding: spacing(3),
-    borderRadius: radii.md,
+    borderRadius: radii.sm,
     marginVertical: spacing(3),
   },
-  button: { backgroundColor: palette.accent, padding: spacing(3), borderRadius: radii.md, alignItems: "center" },
-  buttonDisabled: { opacity: 0.4 },
-  buttonText: { color: palette.background, fontWeight: "700" },
+  button: {
+    backgroundColor: palette.accent,
+    padding: spacing(3.5),
+    borderRadius: radii.sm,
+    alignItems: "center",
+  },
+  buttonDisabled: { opacity: 0.35 },
+  buttonText: {
+    color: palette.background,
+    fontFamily: fonts.bodyBold,
+    fontSize: 12.5,
+    letterSpacing: 2,
+  },
 });

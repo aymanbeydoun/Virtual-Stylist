@@ -58,15 +58,37 @@ interface ThemeState {
   setBackground: (id: string) => void;
 }
 
+/** Maps pre-redesign accent ids onto their closest new neon token. */
+const LEGACY_ACCENTS: Record<string, string> = {
+  pink: "rose",
+  red: "crimson",
+  orange: "signal",
+  yellow: "amber",
+  lime: "volt",
+  green: "mint",
+  teal: "mint",
+  blue: "electric",
+  indigo: "violet",
+  purple: "violet",
+};
+
 export const useTheme = create<ThemeState>()(
   persist(
     (set) => ({
-      accentId: "pink",
+      accentId: "rose",
       backgroundId: "solid",
       setAccent: (id) => set({ accentId: id }),
       setBackground: (id) => set({ backgroundId: id }),
     }),
-    { name: "stail_theme", storage: persistedStorage },
+    {
+      name: "stail_theme",
+      storage: persistedStorage,
+      version: 1,
+      migrate: (state) => {
+        const s = state as ThemeState;
+        return { ...s, accentId: LEGACY_ACCENTS[s.accentId] ?? s.accentId };
+      },
+    },
   ),
 );
 

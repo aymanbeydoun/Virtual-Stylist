@@ -5,13 +5,15 @@ import { Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-nati
 
 import { familyApi } from "@/api/family";
 import type { FamilyMemberKind } from "@/api/types";
-import { palette, radii, spacing } from "@/theme";
+import { useAccent } from "@/state/theme";
+import { fonts, glass, palette, radii, spacing } from "@/theme";
 
 const KINDS: FamilyMemberKind[] = ["kid", "teen", "adult"];
 
 export function AddMemberScreen() {
   const nav = useNavigation();
   const qc = useQueryClient();
+  const accent = useAccent().color;
   const [name, setName] = useState("");
   const [kind, setKind] = useState<FamilyMemberKind>("kid");
   const [birthYear, setBirthYear] = useState("");
@@ -37,7 +39,7 @@ export function AddMemberScreen() {
 
   return (
     <View style={styles.root}>
-      <Text style={styles.label}>Name</Text>
+      <Text style={styles.label}>NAME</Text>
       <TextInput
         style={styles.input}
         placeholder="First name only for kids"
@@ -46,20 +48,25 @@ export function AddMemberScreen() {
         onChangeText={setName}
       />
 
-      <Text style={styles.label}>Profile type</Text>
+      <Text style={styles.label}>PROFILE TYPE</Text>
       <View style={styles.row}>
         {KINDS.map((k) => (
           <Pressable
             key={k}
-            style={[styles.kindChip, kind === k && styles.kindChipActive]}
+            style={[
+              styles.kindChip,
+              kind === k && { backgroundColor: accent, borderColor: accent },
+            ]}
             onPress={() => setKind(k)}
           >
-            <Text style={[styles.kindText, kind === k && styles.kindTextActive]}>{k}</Text>
+            <Text style={[styles.kindText, kind === k && styles.kindTextActive]}>
+              {k.toUpperCase()}
+            </Text>
           </Pressable>
         ))}
       </View>
 
-      <Text style={styles.label}>Birth year (optional, for sizing)</Text>
+      <Text style={styles.label}>BIRTH YEAR (OPTIONAL, FOR SIZING)</Text>
       <TextInput
         style={styles.input}
         placeholder="e.g. 2015"
@@ -80,11 +87,17 @@ export function AddMemberScreen() {
       )}
 
       <Pressable
-        style={[styles.submit, !canSubmit && styles.submitDisabled]}
+        style={[
+          styles.submit,
+          { backgroundColor: accent },
+          !canSubmit && styles.submitDisabled,
+        ]}
         disabled={!canSubmit || create.isPending}
         onPress={() => create.mutate()}
       >
-        <Text style={styles.submitText}>{create.isPending ? "Creating…" : "Create profile"}</Text>
+        <Text style={styles.submitText}>
+          {create.isPending ? "CREATING…" : "CREATE PROFILE"}
+        </Text>
       </Pressable>
 
       {create.isError && (
@@ -98,46 +111,62 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "transparent", padding: spacing(5) },
   label: {
     color: palette.textMuted,
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: 1,
+    fontFamily: fonts.mono,
+    fontSize: 10,
+    letterSpacing: 1.8,
     marginTop: spacing(4),
     marginBottom: spacing(2),
   },
   input: {
-    backgroundColor: palette.surface,
+    ...glass,
     color: palette.text,
+    fontFamily: fonts.body,
+    fontSize: 14.5,
     padding: spacing(3),
-    borderRadius: radii.md,
+    borderRadius: radii.sm,
   },
   row: { flexDirection: "row", gap: spacing(2) },
   kindChip: {
+    ...glass,
     paddingHorizontal: spacing(4),
-    paddingVertical: spacing(2),
-    borderRadius: radii.pill,
-    backgroundColor: palette.surface,
+    paddingVertical: spacing(2.5),
+    borderRadius: radii.sm,
   },
-  kindChipActive: { backgroundColor: palette.accent },
-  kindText: { color: palette.text, textTransform: "capitalize" },
-  kindTextActive: { color: palette.background, fontWeight: "700" },
+  kindText: {
+    color: palette.textMuted,
+    fontFamily: fonts.mono,
+    fontSize: 11.5,
+    letterSpacing: 1.2,
+  },
+  kindTextActive: { color: "#0A0B0E", fontFamily: fonts.bodyBold },
   consent: {
+    ...glass,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing(3),
     marginTop: spacing(5),
-    backgroundColor: palette.surface,
     padding: spacing(4),
     borderRadius: radii.md,
   },
-  consentText: { color: palette.textMuted, flex: 1, fontSize: 13 },
+  consentText: {
+    color: palette.textMuted,
+    fontFamily: fonts.body,
+    flex: 1,
+    fontSize: 12.5,
+    lineHeight: 18,
+  },
   submit: {
-    backgroundColor: palette.accent,
     padding: spacing(4),
-    borderRadius: radii.md,
+    borderRadius: radii.sm,
     alignItems: "center",
     marginTop: spacing(8),
   },
-  submitDisabled: { opacity: 0.4 },
-  submitText: { color: palette.background, fontWeight: "700", fontSize: 16 },
-  error: { color: palette.danger, marginTop: spacing(4) },
+  submitDisabled: { opacity: 0.35 },
+  submitText: {
+    color: "#0A0B0E",
+    fontFamily: fonts.bodyBold,
+    fontSize: 13,
+    letterSpacing: 2,
+  },
+  error: { color: palette.danger, fontFamily: fonts.body, marginTop: spacing(4) },
 });

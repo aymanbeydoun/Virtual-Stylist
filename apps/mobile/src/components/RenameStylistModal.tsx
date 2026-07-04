@@ -1,5 +1,5 @@
 import { BlurView } from "expo-blur";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { useStylist } from "@/state/stylist";
@@ -21,6 +21,11 @@ export function RenameStylistModal({
   const name = useStylist((s) => s.name);
   const setName = useStylist((s) => s.setName);
   const [draft, setDraft] = useState(name);
+
+  // Re-sync the draft each time the dialog opens so it never shows stale text.
+  useEffect(() => {
+    if (visible) setDraft(name);
+  }, [visible, name]);
 
   const save = () => {
     setName(draft);

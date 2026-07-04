@@ -184,3 +184,35 @@ export function PlusIcon({ size = 16, color = "#0A0B0E", strokeWidth = 2.2 }: Ic
     </Svg>
   );
 }
+
+/** Camera — capture actions. */
+export function CameraIcon({ size = 18, color = "#0A0B0E", strokeWidth = 1.8 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M4 8h3l1.6-2.4A1.5 1.5 0 0 1 9.85 5h4.3a1.5 1.5 0 0 1 1.25.6L17 8h3a1.5 1.5 0 0 1 1.5 1.5V18A1.5 1.5 0 0 1 20 19.5H4A1.5 1.5 0 0 1 2.5 18V9.5A1.5 1.5 0 0 1 4 8Z"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+      <Circle cx={12} cy={13.4} r={3.4} stroke={color} strokeWidth={strokeWidth} />
+    </Svg>
+  );
+}
+
+/** Picture frame — photo-library actions. */
+export function GalleryIcon({ size = 18, color = "#F5F6F7", strokeWidth = 1.8 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x={3.5} y={4.5} width={17} height={15} rx={2} stroke={color} strokeWidth={strokeWidth} />
+      <Circle cx={9} cy={9.6} r={1.5} stroke={color} strokeWidth={strokeWidth} />
+      <Path
+        d="m4.5 17 4.5-4.5 3.5 3.5 3-3 4 4"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}

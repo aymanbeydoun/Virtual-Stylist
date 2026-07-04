@@ -25,8 +25,9 @@ export function YouScreen() {
   const accent = useAccent();
   const activeColor = accent.color;
 
+  // Mirrors AppBackground's stops exactly so previews match reality.
   const designStops = (d: BackgroundDesign): [string, string, ...string[]] =>
-    (d.fromAccent ? [`${accent.color}66`, "#0A0B0E", "#060709"] : [...d.colors]) as [
+    (d.fromAccent ? [`${accent.color}40`, "#0A0B0E", "#060709"] : [...d.colors]) as [
       string,
       string,
       ...string[],

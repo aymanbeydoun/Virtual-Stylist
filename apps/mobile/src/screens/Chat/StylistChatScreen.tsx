@@ -128,6 +128,7 @@ export function StylistChatScreen() {
             placeholderTextColor={palette.textMuted}
             style={styles.input}
             multiline
+            submitBehavior="submit"
             onSubmitEditing={send}
             returnKeyType="send"
           />

@@ -10,6 +10,7 @@ export function SignInScreen() {
   const signIn = useAuth((s) => s.signIn);
   const accent = useAccent().color;
   const [value, setValue] = useState("");
+  const trimmed = value.trim();
 
   return (
     <SafeAreaView style={styles.root}>
@@ -29,9 +30,9 @@ export function SignInScreen() {
           autoCapitalize="words"
         />
         <Pressable
-          style={[styles.button, { backgroundColor: accent }, !value && styles.buttonDisabled]}
-          disabled={!value}
-          onPress={() => signIn(value.trim())}
+          style={[styles.button, { backgroundColor: accent }, !trimmed && styles.buttonDisabled]}
+          disabled={!trimmed}
+          onPress={() => signIn(trimmed)}
         >
           <Text style={styles.buttonText}>LET&apos;S GO</Text>
         </Pressable>

@@ -66,7 +66,7 @@ export function StatusScreen() {
             <Text style={[styles.colTitle, styles.headerText]}>Title</Text>
           </View>
 
-          {LEVELS.map((lvl, idx) => {
+          {LEVELS.map((lvl) => {
             const reached = daysUsed >= lvl.minDays;
             const isCurrent = lvl.level === current.level;
             return (
@@ -74,7 +74,6 @@ export function StatusScreen() {
                 key={lvl.level}
                 style={[
                   styles.row,
-                  idx > 0 && styles.rowDivider,
                   isCurrent && { backgroundColor: `${lvl.color}14`, borderColor: `${lvl.color}66` },
                 ]}
               >
@@ -197,7 +196,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "transparent",
   },
-  rowDivider: { borderTopWidth: 0 },
   colLevel: { width: 48 },
   colTime: { width: 78 },
   colTitle: { flex: 1 },

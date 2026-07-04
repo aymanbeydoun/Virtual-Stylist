@@ -105,10 +105,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
   },
-  // Tall portrait cards — premium e-commerce grid geometry.
+  // Tall portrait cards — premium e-commerce grid geometry. maxWidth keeps a
+  // lone card in the final row from stretching to double size.
   card: {
     ...glass,
     flex: 1,
+    maxWidth: "48.5%",
     borderRadius: radii.md,
     overflow: "hidden",
   },
