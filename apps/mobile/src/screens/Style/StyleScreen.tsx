@@ -27,9 +27,11 @@ import {
 } from "@/data/style";
 import { stailMe, type DemoOutfit } from "@/demo/stylist";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
+import { useAura } from "@/state/aura";
 import { useActiveProfile } from "@/state/profile";
 import { useStylist } from "@/state/stylist";
 import { useAccent } from "@/state/theme";
+import { auraForVibe } from "@/theme/auras";
 import { fonts, glass, palette, radii, spacing } from "@/theme";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -54,11 +56,14 @@ export function StyleScreen() {
   const cardWidth = width - spacing(14);
   const snap = cardWidth + spacing(3);
 
+  const setAura = useAura((s) => s.setAura);
+
   const onStaileMe = () => {
     if (!vibe || !occasion) return;
     setLoading(true);
     setOutfits(null);
-    // Small "thinking" beat so it feels like the stylist is working.
+    // The canvas breathes into the vibe's aura while the stylist "thinks".
+    setAura(auraForVibe(vibe.id));
     setTimeout(() => {
       setOutfits(stailMe(vibe.label, occasion.label));
       setLoading(false);

@@ -12,7 +12,7 @@ import { useEffect } from "react";
 import { View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { AppBackground } from "@/components/AppBackground";
+import { ThemeEngine } from "@/components/ThemeEngine";
 import { RootNavigator } from "@/navigation/RootNavigator";
 import { useGamification } from "@/state/gamification";
 import { palette } from "@/theme";
@@ -23,7 +23,7 @@ const queryClient = new QueryClient({
   },
 });
 
-// Transparent so the themed AppBackground shows through every screen.
+// Transparent so the ThemeEngine canvas shows through every screen.
 const navTheme = {
   ...DarkTheme,
   colors: { ...DarkTheme.colors, background: "transparent" },
@@ -54,7 +54,7 @@ export default function App() {
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
         <View style={{ flex: 1 }}>
-          <AppBackground />
+          <ThemeEngine />
           <NavigationContainer theme={navTheme}>
             <RootNavigator />
             <StatusBar style="light" />

@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CheckIcon } from "@/components/icons";
+import { useAura } from "@/state/aura";
 import { useAuth } from "@/state/auth";
 import { useActiveProfile } from "@/state/profile";
 import {
@@ -25,7 +26,7 @@ export function YouScreen() {
   const accent = useAccent();
   const activeColor = accent.color;
 
-  // Mirrors AppBackground's stops exactly so previews match reality.
+  // Mirrors ThemeEngine's base stops exactly so previews match reality.
   const designStops = (d: BackgroundDesign): [string, string, ...string[]] =>
     (d.fromAccent ? [`${accent.color}40`, "#0A0B0E", "#060709"] : [...d.colors]) as [
       string,
@@ -86,7 +87,11 @@ export function YouScreen() {
                 <Pressable
                   key={d.id}
                   style={styles.designWrap}
-                  onPress={() => setBackground(d.id)}
+                  onPress={() => {
+                    // Manual backdrop choice takes over from any live aura.
+                    useAura.getState().setAura(null);
+                    setBackground(d.id);
+                  }}
                   accessibilityLabel={`${d.name} background`}
                 >
                   <LinearGradient
