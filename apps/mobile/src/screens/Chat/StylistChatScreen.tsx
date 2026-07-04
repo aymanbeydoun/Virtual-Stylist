@@ -14,8 +14,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { quoteForToday } from "@/data/quotes";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
-import { useActiveProfile } from "@/state/profile";
 import { useStylist } from "@/state/stylist";
+import { useAccent } from "@/state/theme";
 import { palette, radii, spacing } from "@/theme";
 
 interface Message {
@@ -37,8 +37,7 @@ export function StylistChatScreen() {
   const route = useRoute<RouteProp<RootStackParamList, "StylistChat">>();
   const nav = useNavigation();
   const aiName = useStylist((s) => s.name);
-  const isKidMode = useActiveProfile((s) => s.isKidMode);
-  const accent = isKidMode ? palette.kidPrimary : palette.accent;
+  const accent = useAccent().color;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [typing, setTyping] = useState(true);

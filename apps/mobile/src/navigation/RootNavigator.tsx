@@ -3,7 +3,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Text } from "react-native";
 
 import { useAuth } from "@/state/auth";
-import { useActiveProfile } from "@/state/profile";
+import { useAccent } from "@/state/theme";
 import { palette } from "@/theme";
 import { AddItemScreen } from "@/screens/Closet/AddItemScreen";
 import { ClosetScreen } from "@/screens/Closet/ClosetScreen";
@@ -38,8 +38,7 @@ function TabBarIcon({ label, focused }: { label: string; focused: boolean }) {
 }
 
 function Tabs() {
-  const isKidMode = useActiveProfile((s) => s.isKidMode);
-  const activeColor = isKidMode ? palette.kidPrimary : palette.accent;
+  const activeColor = useAccent().color;
   return (
     <Tab.Navigator
       screenOptions={{

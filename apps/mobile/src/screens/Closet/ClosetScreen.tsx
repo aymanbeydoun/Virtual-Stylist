@@ -3,6 +3,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { DEMO_CLOSET, type DemoItem } from "@/data/demoCloset";
 import { useActiveProfile } from "@/state/profile";
+import { useAccent } from "@/state/theme";
 import { palette, radii, spacing } from "@/theme";
 
 const SLOT_LABELS: Record<DemoItem["slot"], string> = {
@@ -16,6 +17,7 @@ const SLOT_LABELS: Record<DemoItem["slot"], string> = {
 
 export function ClosetScreen() {
   const profile = useActiveProfile();
+  const accent = useAccent().color;
 
   return (
     <SafeAreaView style={styles.root}>
@@ -24,8 +26,8 @@ export function ClosetScreen() {
           <Text style={styles.eyebrow}>Closet</Text>
           <Text style={styles.title}>{profile.ownerLabel}</Text>
         </View>
-        <View style={styles.pill}>
-          <Text style={styles.pillText}>Demo closet</Text>
+        <View style={[styles.pill, { borderColor: accent }]}>
+          <Text style={[styles.pillText, { color: accent }]}>Demo closet</Text>
         </View>
       </View>
 

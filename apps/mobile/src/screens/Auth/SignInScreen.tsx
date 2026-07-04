@@ -3,10 +3,12 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/state/auth";
+import { useAccent } from "@/state/theme";
 import { palette, radii, spacing } from "@/theme";
 
 export function SignInScreen() {
   const signIn = useAuth((s) => s.signIn);
+  const accent = useAccent().color;
   const [value, setValue] = useState("");
 
   return (
@@ -26,7 +28,7 @@ export function SignInScreen() {
           autoCapitalize="words"
         />
         <Pressable
-          style={[styles.button, !value && styles.buttonDisabled]}
+          style={[styles.button, { backgroundColor: accent }, !value && styles.buttonDisabled]}
           disabled={!value}
           onPress={() => signIn(value.trim())}
         >

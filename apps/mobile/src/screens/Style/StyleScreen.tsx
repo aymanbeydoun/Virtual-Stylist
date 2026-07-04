@@ -20,6 +20,7 @@ import { stailMe, type DemoOutfit } from "@/demo/stylist";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useActiveProfile } from "@/state/profile";
 import { useStylist } from "@/state/stylist";
+import { useAccent } from "@/state/theme";
 import { palette, radii, spacing } from "@/theme";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -36,7 +37,7 @@ export function StyleScreen() {
 
   const vibes = profile.isKidMode ? KID_VIBES : VIBES;
   const occasions = profile.isKidMode ? KID_OCCASIONS : OCCASIONS;
-  const accent = profile.isKidMode ? palette.kidPrimary : palette.accent;
+  const accent = useAccent().color;
   const ready = Boolean(vibe && occasion);
 
   const onStaileMe = () => {
