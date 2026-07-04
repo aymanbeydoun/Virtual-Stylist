@@ -1,10 +1,10 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { Text } from "react-native";
 
+import { FamilyIcon, HangerIcon, PersonIcon, SparkIcon } from "@/components/icons";
 import { useAuth } from "@/state/auth";
 import { useAccent } from "@/state/theme";
-import { palette } from "@/theme";
+import { fonts, palette } from "@/theme";
 import { AddItemScreen } from "@/screens/Closet/AddItemScreen";
 import { ClosetScreen } from "@/screens/Closet/ClosetScreen";
 import { ItemDetailScreen } from "@/screens/Closet/ItemDetailScreen";
@@ -31,12 +31,6 @@ export type RootStackParamList = {
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-function TabBarIcon({ label, focused }: { label: string; focused: boolean }) {
-  return (
-    <Text style={{ fontSize: 18, opacity: focused ? 1 : 0.5 }}>{label}</Text>
-  );
-}
-
 function Tabs() {
   const activeColor = useAccent().color;
   return (
@@ -46,28 +40,33 @@ function Tabs() {
         headerShown: false,
         tabBarActiveTintColor: activeColor,
         tabBarInactiveTintColor: palette.textMuted,
-        tabBarStyle: { backgroundColor: palette.background, borderTopColor: palette.surfaceAlt },
+        tabBarLabelStyle: { fontFamily: fonts.mono, fontSize: 9.5, letterSpacing: 1 },
+        tabBarStyle: {
+          backgroundColor: "rgba(10,11,14,0.94)",
+          borderTopWidth: 1,
+          borderTopColor: palette.hairlineFaint,
+        },
       }}
     >
       <Tab.Screen
         name="Closet"
         component={ClosetScreen}
-        options={{ tabBarIcon: ({ focused }) => <TabBarIcon label="👚" focused={focused} /> }}
+        options={{ tabBarIcon: ({ color }) => <HangerIcon size={21} color={color} /> }}
       />
       <Tab.Screen
         name="Style"
         component={StyleScreen}
-        options={{ tabBarIcon: ({ focused }) => <TabBarIcon label="✨" focused={focused} /> }}
+        options={{ tabBarIcon: ({ color }) => <SparkIcon size={21} color={color} /> }}
       />
       <Tab.Screen
         name="Family"
         component={FamilyScreen}
-        options={{ tabBarIcon: ({ focused }) => <TabBarIcon label="👪" focused={focused} /> }}
+        options={{ tabBarIcon: ({ color }) => <FamilyIcon size={21} color={color} /> }}
       />
       <Tab.Screen
         name="You"
         component={YouScreen}
-        options={{ tabBarIcon: ({ focused }) => <TabBarIcon label="👤" focused={focused} /> }}
+        options={{ tabBarIcon: ({ color }) => <PersonIcon size={21} color={color} /> }}
       />
     </Tab.Navigator>
   );
@@ -81,6 +80,8 @@ export function RootNavigator() {
         contentStyle: { backgroundColor: "transparent" },
         headerStyle: { backgroundColor: "transparent" },
         headerTintColor: palette.text,
+        headerTitleStyle: { fontFamily: fonts.bodyBold, fontSize: 15 },
+        headerShadowVisible: false,
       }}
     >
       {!signedIn ? (

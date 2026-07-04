@@ -1,12 +1,13 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { LevelInsignia } from "@/components/LevelInsignia";
 import { useGamification } from "@/state/gamification";
 import { levelForDays } from "@/theme/levels";
-import { palette, radii, spacing } from "@/theme";
+import { fonts, glass, palette, radii, spacing } from "@/theme";
 
 /**
  * Compact status pill (shown top-right on the Style screen). Tapping it opens
- * the full status ladder.
+ * the full status ladder. Glass surface + geometric rank insignia.
  */
 export function LevelBadge({ onPress }: { onPress: () => void }) {
   const daysUsed = useGamification((s) => s.daysUsed);
@@ -15,13 +16,11 @@ export function LevelBadge({ onPress }: { onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.badge, { borderColor: level.color }]}
+      style={styles.badge}
       accessibilityRole="button"
       accessibilityLabel={`Level ${level.level}, ${level.title}. Open status`}
     >
-      <View style={[styles.dot, { backgroundColor: level.color }]}>
-        <Text style={styles.emoji}>{level.emoji}</Text>
-      </View>
+      <LevelInsignia level={level.level} color={level.color} size={30} />
       <View>
         <Text style={[styles.level, { color: level.color }]}>LVL {level.level}</Text>
         <Text style={styles.title} numberOfLines={1}>
@@ -34,24 +33,15 @@ export function LevelBadge({ onPress }: { onPress: () => void }) {
 
 const styles = StyleSheet.create({
   badge: {
+    ...glass,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing(2),
-    borderWidth: 1.5,
     borderRadius: radii.pill,
     paddingVertical: spacing(1.5),
-    paddingHorizontal: spacing(2.5),
-    backgroundColor: palette.surface,
-    maxWidth: 160,
+    paddingHorizontal: spacing(3),
+    maxWidth: 168,
   },
-  dot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emoji: { fontSize: 14 },
-  level: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
-  title: { color: palette.text, fontSize: 12, fontWeight: "600" },
+  level: { fontFamily: fonts.mono, fontSize: 10, letterSpacing: 1.5 },
+  title: { color: palette.text, fontFamily: fonts.bodyBold, fontSize: 12 },
 });

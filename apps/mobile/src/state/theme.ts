@@ -12,20 +12,24 @@ export interface AccentTheme {
   dark: string;
 }
 
-/** The palette the user can pick from — black stays; the accent changes. */
+/**
+ * Global accent tokens — muted, sophisticated neons plus high-saturation
+ * contrast accents (vivid crimson, absolute white, electric blue). The ink
+ * canvas never changes; only these high-contrast elements shift.
+ */
 export const ACCENT_THEMES: AccentTheme[] = [
-  { id: "pink", name: "Pink", color: "#F472B6", dark: "#DB2777" },
-  { id: "red", name: "Red", color: "#FB7185", dark: "#E11D48" },
-  { id: "orange", name: "Orange", color: "#FB923C", dark: "#EA580C" },
-  { id: "yellow", name: "Yellow", color: "#FACC15", dark: "#CA8A04" },
-  { id: "lime", name: "Lime", color: "#A3E635", dark: "#65A30D" },
-  { id: "green", name: "Green", color: "#34D399", dark: "#059669" },
-  { id: "teal", name: "Teal", color: "#2DD4BF", dark: "#0D9488" },
-  { id: "cyan", name: "Cyan", color: "#22D3EE", dark: "#0891B2" },
-  { id: "blue", name: "Blue", color: "#60A5FA", dark: "#2563EB" },
-  { id: "indigo", name: "Indigo", color: "#818CF8", dark: "#4F46E5" },
-  { id: "purple", name: "Purple", color: "#C084FC", dark: "#9333EA" },
-  { id: "magenta", name: "Magenta", color: "#E879F9", dark: "#C026D3" },
+  { id: "rose", name: "Rose", color: "#FF4D8D", dark: "#D81B60" },
+  { id: "crimson", name: "Crimson", color: "#FF2E4D", dark: "#C81E3A" },
+  { id: "white", name: "White", color: "#FFFFFF", dark: "#C9CDD4" },
+  { id: "electric", name: "Electric", color: "#2E6BFF", dark: "#1D4ED8" },
+  { id: "cyan", name: "Cyan", color: "#45E3FF", dark: "#0891B2" },
+  { id: "mint", name: "Mint", color: "#34F5C5", dark: "#0D9488" },
+  { id: "volt", name: "Volt", color: "#D4FF4F", dark: "#84CC16" },
+  { id: "amber", name: "Amber", color: "#FFC24B", dark: "#D97706" },
+  { id: "signal", name: "Signal", color: "#FF7847", dark: "#EA580C" },
+  { id: "violet", name: "Violet", color: "#9D6BFF", dark: "#7C3AED" },
+  { id: "magenta", name: "Magenta", color: "#FF4DD8", dark: "#C026D3" },
+  { id: "silver", name: "Silver", color: "#A9B1BD", dark: "#6B7280" },
 ];
 
 export interface BackgroundDesign {
@@ -37,13 +41,13 @@ export interface BackgroundDesign {
   fromAccent?: boolean;
 }
 
-/** Background "designs" — the black stays dark but gains character. */
+/** Background "designs" — deep ink undertones; the canvas stays near-black. */
 export const BACKGROUND_DESIGNS: BackgroundDesign[] = [
-  { id: "solid", name: "Solid", colors: ["#0F172A", "#0F172A"] },
-  { id: "night", name: "Night", colors: ["#020617", "#0F172A", "#1E1B4B"] },
-  { id: "ocean", name: "Ocean", colors: ["#020617", "#0C2D48", "#0E7490"] },
-  { id: "sunset", name: "Sunset", colors: ["#0F172A", "#3B0764", "#831843"] },
-  { id: "forest", name: "Forest", colors: ["#022C22", "#0F172A", "#052E16"] },
+  { id: "solid", name: "Ink", colors: ["#0A0B0E", "#0A0B0E"] },
+  { id: "night", name: "Night", colors: ["#060709", "#0A0B0E", "#14122B"] },
+  { id: "ocean", name: "Ocean", colors: ["#060709", "#0A1622", "#0A3644"] },
+  { id: "sunset", name: "Sunset", colors: ["#0A0B0E", "#26082E", "#3D0E27"] },
+  { id: "forest", name: "Forest", colors: ["#061410", "#0A0B0E", "#07200F"] },
   { id: "glow", name: "Accent glow", colors: [], fromAccent: true },
 ];
 

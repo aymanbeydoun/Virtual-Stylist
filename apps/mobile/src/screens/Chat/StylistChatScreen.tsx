@@ -12,11 +12,12 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { SendIcon } from "@/components/icons";
 import { quoteForToday } from "@/data/quotes";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useStylist } from "@/state/stylist";
 import { useAccent } from "@/state/theme";
-import { palette, radii, spacing } from "@/theme";
+import { fonts, palette, radii, spacing } from "@/theme";
 
 interface Message {
   id: string;
@@ -135,7 +136,7 @@ export function StylistChatScreen() {
             onPress={send}
             disabled={!input.trim()}
           >
-            <Text style={styles.sendText}>➤</Text>
+            <SendIcon size={17} color="#0A0B0E" />
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -288,43 +289,62 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "transparent" },
   contextCard: {
     backgroundColor: palette.surface,
+    borderWidth: 1,
+    borderColor: palette.hairline,
     borderRadius: radii.md,
     padding: spacing(3),
     marginBottom: spacing(3),
   },
   contextLabel: {
     color: palette.textMuted,
-    fontSize: 10,
+    fontFamily: fonts.mono,
+    fontSize: 9,
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 1.8,
   },
-  contextText: { color: palette.text, marginTop: 2 },
+  contextText: { color: palette.text, fontFamily: fonts.bodyMedium, fontSize: 13, marginTop: 3 },
   bubbleRow: { marginBottom: spacing(3), maxWidth: "85%" },
   left: { alignSelf: "flex-start" },
   right: { alignSelf: "flex-end" },
-  sender: { color: palette.textMuted, fontSize: 11, marginBottom: 2, marginLeft: spacing(1) },
+  sender: {
+    color: palette.textMuted,
+    fontFamily: fonts.mono,
+    fontSize: 9.5,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    marginBottom: 3,
+    marginLeft: spacing(1),
+  },
   bubble: { paddingVertical: spacing(3), paddingHorizontal: spacing(4), borderRadius: radii.lg },
-  aiBubble: { backgroundColor: palette.surface, borderTopLeftRadius: 4 },
+  aiBubble: {
+    backgroundColor: palette.surface,
+    borderWidth: 1,
+    borderColor: palette.hairline,
+    borderTopLeftRadius: 4,
+  },
   userBubble: { borderTopRightRadius: 4 },
-  bubbleText: { color: palette.text, fontSize: 15, lineHeight: 21 },
+  bubbleText: { color: palette.text, fontFamily: fonts.body, fontSize: 14.5, lineHeight: 21 },
   inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",
     gap: spacing(2),
     padding: spacing(3),
     borderTopWidth: 1,
-    borderTopColor: palette.surfaceAlt,
-    backgroundColor: palette.background,
+    borderTopColor: palette.hairlineFaint,
+    backgroundColor: "rgba(10,11,14,0.85)",
   },
   input: {
     flex: 1,
     backgroundColor: palette.surface,
+    borderWidth: 1,
+    borderColor: palette.hairline,
     borderRadius: radii.lg,
     color: palette.text,
+    fontFamily: fonts.body,
     paddingHorizontal: spacing(4),
     paddingVertical: spacing(3),
     maxHeight: 120,
-    fontSize: 15,
+    fontSize: 14.5,
   },
   sendBtn: {
     width: 44,
@@ -333,5 +353,4 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  sendText: { color: palette.background, fontSize: 18, fontWeight: "700" },
 });

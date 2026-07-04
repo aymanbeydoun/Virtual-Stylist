@@ -1,13 +1,22 @@
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { ChatIcon, ChevronIcon, PenIcon } from "@/components/icons";
 import { LevelBadge } from "@/components/LevelBadge";
+import { OutfitCanvas } from "@/components/OutfitCanvas";
+import { RatingTier } from "@/components/RatingTier";
 import { RenameStylistModal } from "@/components/RenameStylistModal";
-import type { DemoItem } from "@/data/demoCloset";
-import { RATINGS } from "@/data/ratings";
 import {
   KID_OCCASIONS,
   KID_VIBES,
@@ -21,7 +30,7 @@ import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useActiveProfile } from "@/state/profile";
 import { useStylist } from "@/state/stylist";
 import { useAccent } from "@/state/theme";
-import { palette, radii, spacing } from "@/theme";
+import { fonts, glass, palette, radii, spacing } from "@/theme";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -29,6 +38,7 @@ export function StyleScreen() {
   const nav = useNavigation<Nav>();
   const profile = useActiveProfile();
   const aiName = useStylist((s) => s.name);
+  const { width } = useWindowDimensions();
   const [vibe, setVibe] = useState<VibeOption | null>(null);
   const [occasion, setOccasion] = useState<OccasionOption | null>(null);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -39,6 +49,10 @@ export function StyleScreen() {
   const occasions = profile.isKidMode ? KID_OCCASIONS : OCCASIONS;
   const accent = useAccent().color;
   const ready = Boolean(vibe && occasion);
+
+  // Lookbook cards page horizontally, peeking the next look.
+  const cardWidth = width - spacing(14);
+  const snap = cardWidth + spacing(3);
 
   const onStaileMe = () => {
     if (!vibe || !occasion) return;
@@ -53,23 +67,23 @@ export function StyleScreen() {
 
   return (
     <SafeAreaView style={styles.root}>
-      <ScrollView contentContainerStyle={{ padding: spacing(5) }}>
+      <ScrollView contentContainerStyle={{ paddingVertical: spacing(5) }}>
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
             <Text style={styles.eyebrow}>STaiLE ME</Text>
             <Text style={styles.title}>
-              {profile.isKidMode ? `Hey ${profile.ownerLabel}!` : "What's the move?"}
+              {profile.isKidMode ? `HEY ${profile.ownerLabel.toUpperCase()}!` : "WHAT'S THE MOVE?"}
             </Text>
           </View>
           <LevelBadge onPress={() => nav.navigate("Status")} />
         </View>
 
-        <Text style={styles.section}>What&apos;s the vibe?</Text>
+        <Text style={styles.section}>WHAT&apos;S THE VIBE?</Text>
         <View style={styles.chips}>
           {vibes.map((v) => (
             <Chip
               key={v.id}
-              label={`${v.emoji} ${v.label}`}
+              label={v.label}
               active={vibe?.id === v.id}
               accent={accent}
               onPress={() => setVibe(v)}
@@ -77,12 +91,12 @@ export function StyleScreen() {
           ))}
         </View>
 
-        <Text style={styles.section}>Where are you going?</Text>
+        <Text style={styles.section}>WHERE ARE YOU GOING?</Text>
         <View style={styles.chips}>
           {occasions.map((o) => (
             <Chip
               key={o.id}
-              label={`${o.emoji} ${o.label}`}
+              label={o.label}
               active={occasion?.id === o.id}
               accent={accent}
               onPress={() => setOccasion(o)}
@@ -91,7 +105,11 @@ export function StyleScreen() {
         </View>
 
         <Pressable
-          style={[styles.cta, { backgroundColor: accent }, !ready && { opacity: 0.4 }]}
+          style={[
+            styles.cta,
+            { backgroundColor: accent, shadowColor: accent },
+            !ready && { opacity: 0.35, shadowOpacity: 0 },
+          ]}
           disabled={!ready || loading}
           onPress={onStaileMe}
         >
@@ -99,33 +117,48 @@ export function StyleScreen() {
             <ActivityIndicator color={palette.background} />
           ) : (
             <Text style={styles.ctaText}>
-              {profile.isKidMode ? "STaiLE my mission ✨" : "STaiLE ME"}
+              {profile.isKidMode ? "STaiLE MY MISSION" : "STaiLE ME"}
             </Text>
           )}
         </Pressable>
 
         {loading && (
-          <Text style={styles.thinking}>{aiName} is putting looks together… 🧵</Text>
+          <Text style={styles.thinking}>{aiName.toUpperCase()} IS PUTTING LOOKS TOGETHER…</Text>
         )}
 
-        {outfits?.map((o, idx) => (
-          <OutfitCard
-            key={o.id}
-            outfit={o}
-            index={idx}
-            aiName={aiName}
-            accent={accent}
-            onEditName={() => setRenameOpen(true)}
-            onChat={() =>
-              nav.navigate("StylistChat", {
-                outfitId: o.id,
-                context: `Outfit ${idx + 1}${
-                  vibe && occasion ? ` — ${vibe.label}, ${occasion.label}` : ""
-                }`,
-              })
-            }
-          />
-        ))}
+        {outfits && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={snap}
+            decelerationRate="fast"
+            contentContainerStyle={{
+              paddingHorizontal: spacing(5),
+              gap: spacing(3),
+              paddingTop: spacing(5),
+            }}
+          >
+            {outfits.map((o, idx) => (
+              <OutfitCard
+                key={o.id}
+                outfit={o}
+                index={idx}
+                width={cardWidth}
+                aiName={aiName}
+                accent={accent}
+                onEditName={() => setRenameOpen(true)}
+                onChat={() =>
+                  nav.navigate("StylistChat", {
+                    outfitId: o.id,
+                    context: `Outfit ${idx + 1}${
+                      vibe && occasion ? ` — ${vibe.label}, ${occasion.label}` : ""
+                    }`,
+                  })
+                }
+              />
+            ))}
+          </ScrollView>
+        )}
       </ScrollView>
 
       <RenameStylistModal
@@ -150,11 +183,20 @@ function Chip({
 }) {
   return (
     <Pressable
-      style={[styles.chip, active && { backgroundColor: accent, borderColor: accent }]}
+      style={[
+        styles.chip,
+        active && {
+          borderColor: accent,
+          shadowColor: accent,
+          shadowOpacity: 0.55,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 0 },
+        },
+      ]}
       onPress={onPress}
     >
-      <Text style={[styles.chipText, active && { color: palette.background, fontWeight: "700" }]}>
-        {label}
+      <Text style={[styles.chipText, active && { color: accent, fontFamily: fonts.bodyBold }]}>
+        {label.toUpperCase()}
       </Text>
     </Pressable>
   );
@@ -163,6 +205,7 @@ function Chip({
 function OutfitCard({
   outfit,
   index,
+  width,
   aiName,
   accent,
   onChat,
@@ -170,6 +213,7 @@ function OutfitCard({
 }: {
   outfit: DemoOutfit;
   index: number;
+  width: number;
   aiName: string;
   accent: string;
   onChat: () => void;
@@ -178,57 +222,45 @@ function OutfitCard({
   const [rating, setRating] = useState<number | null>(null);
 
   return (
-    <View style={styles.outfit}>
+    <View style={[styles.outfit, { width }]}>
       <View style={styles.outfitHeader}>
-        <Text style={styles.outfitTitle}>Outfit {index + 1}</Text>
-        <Text style={styles.outfitConfidence}>{Math.round(outfit.confidence * 100)}% match</Text>
+        <Text style={styles.outfitTitle}>OUTFIT {String(index + 1).padStart(2, "0")}</Text>
+        <Text style={[styles.outfitConfidence, { color: accent }]}>
+          {Math.round(outfit.confidence * 100)}% MATCH
+        </Text>
       </View>
 
-      <View style={styles.outfitItems}>
-        {outfit.items.map((item: DemoItem) => (
-          <View key={item.id} style={styles.outfitItem}>
-            <View style={[styles.outfitThumb, { backgroundColor: item.color }]}>
-              <Text style={styles.outfitThumbEmoji}>{item.emoji}</Text>
-            </View>
-            <Text style={styles.outfitSlot} numberOfLines={1}>
-              {item.name}
-            </Text>
-          </View>
-        ))}
-      </View>
+      {/* Lookbook collage — pieces overlap like a curated sketch. */}
+      <OutfitCanvas items={outfit.items} />
+      <Text style={styles.pieces} numberOfLines={1}>
+        {outfit.items.map((i) => i.name.toUpperCase()).join("  ·  ")}
+      </Text>
 
-      {/* Rate the AI's choice */}
-      <Text style={styles.rateLabel}>How do you like it?</Text>
-      <View style={styles.ratings}>
-        {RATINGS.map((r) => (
-          <Pressable
-            key={r.value}
-            onPress={() => setRating(r.value)}
-            style={[styles.rating, rating === r.value && { backgroundColor: accent }]}
-            accessibilityLabel={r.label}
-          >
-            <Text style={styles.ratingEmoji}>{r.emoji}</Text>
-          </Pressable>
-        ))}
-      </View>
+      <View style={styles.divider} />
+
+      <RatingTier value={rating} accent={accent} onChange={setRating} />
 
       {/* AI's rationale */}
       <Text style={styles.rationale}>
-        <Text style={[styles.rationaleName, { color: accent }]}>{aiName}&apos;s choice: </Text>
+        <Text style={[styles.rationaleName, { color: accent }]}>{aiName}&apos;s choice — </Text>
         {outfit.rationale}
       </Text>
 
-      {/* Chat + rename */}
+      {/* Premium chat action bar + rename */}
       <View style={styles.chatRow}>
-        <Pressable style={[styles.chatBtn, { borderColor: accent }]} onPress={onChat}>
-          <Text style={[styles.chatBtnText, { color: accent }]}>💬 Chat to {aiName}</Text>
+        <Pressable style={styles.chatBtn} onPress={onChat}>
+          <View style={[styles.chatIconWell, { borderColor: accent }]}>
+            <ChatIcon size={15} color={accent} />
+          </View>
+          <Text style={styles.chatBtnText}>CHAT TO {aiName.toUpperCase()}</Text>
+          <ChevronIcon size={15} color={palette.textMuted} />
         </Pressable>
         <Pressable
           style={styles.penBtn}
           onPress={onEditName}
           accessibilityLabel="Rename your stylist"
         >
-          <Text style={styles.penIcon}>✏️</Text>
+          <PenIcon size={16} color={palette.text} />
         </Pressable>
       </View>
     </View>
@@ -237,73 +269,160 @@ function OutfitCard({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "transparent" },
-  header: { flexDirection: "row", alignItems: "center", gap: spacing(3), marginBottom: spacing(2) },
-  eyebrow: { color: palette.textMuted, fontSize: 12, letterSpacing: 1, textTransform: "uppercase" },
-  title: { color: palette.text, fontSize: 28, fontWeight: "700", marginTop: 4 },
-  section: { color: palette.text, fontSize: 16, fontWeight: "600", marginTop: spacing(6), marginBottom: spacing(3) },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing(2) },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing(3),
+    marginBottom: spacing(2),
+    paddingHorizontal: spacing(5),
+  },
+  eyebrow: {
+    color: palette.textMuted,
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 2.5,
+  },
+  title: {
+    color: palette.text,
+    fontFamily: fonts.display,
+    fontSize: 24,
+    marginTop: 6,
+    letterSpacing: 0.5,
+    lineHeight: 30,
+  },
+  section: {
+    color: palette.text,
+    fontFamily: fonts.bodyBold,
+    fontSize: 13,
+    letterSpacing: 2,
+    marginTop: spacing(6),
+    marginBottom: spacing(3),
+    paddingHorizontal: spacing(5),
+  },
+  chips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing(2),
+    paddingHorizontal: spacing(5),
+  },
+  // Dark matte chips — clean type, prominent border when active.
   chip: {
     paddingHorizontal: spacing(4),
-    paddingVertical: spacing(2),
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: palette.surfaceAlt,
-    backgroundColor: palette.surface,
+    paddingVertical: spacing(2.5),
+    borderRadius: radii.sm,
+    borderWidth: 1.5,
+    borderColor: palette.hairline,
+    backgroundColor: palette.panel,
   },
-  chipText: { color: palette.text },
-  cta: { padding: spacing(4), borderRadius: radii.md, alignItems: "center", marginTop: spacing(8) },
-  ctaText: { color: palette.background, fontWeight: "700", fontSize: 16 },
-  thinking: { color: palette.textMuted, textAlign: "center", marginTop: spacing(4) },
-  outfit: {
-    backgroundColor: palette.surface,
+  chipText: {
+    color: palette.textMuted,
+    fontFamily: fonts.mono,
+    fontSize: 11.5,
+    letterSpacing: 1.2,
+  },
+  cta: {
     padding: spacing(4),
-    borderRadius: radii.lg,
+    borderRadius: radii.sm,
+    alignItems: "center",
+    marginTop: spacing(8),
+    marginHorizontal: spacing(5),
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  ctaText: {
+    color: "#0A0B0E",
+    fontFamily: fonts.bodyBold,
+    fontSize: 15,
+    letterSpacing: 2.5,
+  },
+  thinking: {
+    color: palette.textMuted,
+    fontFamily: fonts.mono,
+    fontSize: 10.5,
+    letterSpacing: 1.8,
+    textAlign: "center",
     marginTop: spacing(4),
   },
-  outfitHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: spacing(3) },
-  outfitTitle: { color: palette.text, fontWeight: "700", fontSize: 16 },
-  outfitConfidence: { color: palette.textMuted, fontSize: 12 },
-  outfitItems: { flexDirection: "row", gap: spacing(2) },
-  outfitItem: { alignItems: "center", flex: 1 },
-  outfitThumb: {
-    width: "100%",
-    aspectRatio: 1,
-    borderRadius: radii.md,
-    alignItems: "center",
-    justifyContent: "center",
+  outfit: {
+    ...glass,
+    padding: spacing(4),
+    borderRadius: radii.lg,
   },
-  outfitThumbEmoji: { fontSize: 30 },
-  outfitSlot: { color: palette.textMuted, fontSize: 11, marginTop: 4, textAlign: "center" },
-  rateLabel: { color: palette.textMuted, fontSize: 12, marginTop: spacing(4), marginBottom: spacing(2) },
-  ratings: { flexDirection: "row", justifyContent: "space-between", gap: spacing(1) },
-  rating: {
-    flex: 1,
-    aspectRatio: 1,
-    maxWidth: 48,
-    borderRadius: radii.md,
-    backgroundColor: palette.surfaceAlt,
+  outfitHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    justifyContent: "center",
+    marginBottom: spacing(3),
   },
-  ratingEmoji: { fontSize: 20 },
-  rationale: { color: palette.text, marginTop: spacing(4), lineHeight: 20 },
-  rationaleName: { fontWeight: "700" },
-  chatRow: { flexDirection: "row", alignItems: "center", gap: spacing(2), marginTop: spacing(4) },
+  outfitTitle: {
+    color: palette.text,
+    fontFamily: fonts.display,
+    fontSize: 15,
+    letterSpacing: 1,
+  },
+  outfitConfidence: { fontFamily: fonts.mono, fontSize: 11, letterSpacing: 1.5 },
+  pieces: {
+    color: palette.textMuted,
+    fontFamily: fonts.mono,
+    fontSize: 9,
+    letterSpacing: 1.2,
+    marginTop: spacing(2.5),
+  },
+  divider: {
+    height: 1,
+    backgroundColor: palette.hairlineFaint,
+    marginVertical: spacing(3.5),
+  },
+  rationale: {
+    color: palette.text,
+    fontFamily: fonts.body,
+    fontSize: 13.5,
+    marginTop: spacing(4),
+    lineHeight: 20,
+  },
+  rationaleName: { fontFamily: fonts.bodyBold },
+  chatRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing(2),
+    marginTop: spacing(4),
+  },
   chatBtn: {
     flex: 1,
-    borderWidth: 1.5,
-    borderRadius: radii.md,
-    paddingVertical: spacing(3),
+    flexDirection: "row",
     alignItems: "center",
-  },
-  chatBtnText: { fontWeight: "700" },
-  penBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: radii.md,
+    gap: spacing(2.5),
     backgroundColor: palette.surfaceAlt,
+    borderWidth: 1,
+    borderColor: palette.hairline,
+    borderRadius: radii.md,
+    paddingVertical: spacing(2.5),
+    paddingHorizontal: spacing(3),
+  },
+  chatIconWell: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  penIcon: { fontSize: 18 },
+  chatBtnText: {
+    flex: 1,
+    color: palette.text,
+    fontFamily: fonts.bodyBold,
+    fontSize: 12,
+    letterSpacing: 1.5,
+  },
+  penBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: radii.md,
+    backgroundColor: palette.surfaceAlt,
+    borderWidth: 1,
+    borderColor: palette.hairline,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });

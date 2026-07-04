@@ -5,39 +5,59 @@ import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { familyApi } from "@/api/family";
+import { CheckIcon, PlusIcon } from "@/components/icons";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useActiveProfile } from "@/state/profile";
-import { palette, radii, spacing } from "@/theme";
+import { useAccent } from "@/state/theme";
+import { fonts, glass, palette, radii, spacing } from "@/theme";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+/** Monogram avatar — initial in a tinted glass ring (no people emojis). */
+function Monogram({ name, tint }: { name: string; tint: string }) {
+  return (
+    <View style={[styles.monogram, { borderColor: tint }]}>
+      <Text style={[styles.monogramText, { color: tint }]}>
+        {name.trim().charAt(0).toUpperCase() || "?"}
+      </Text>
+    </View>
+  );
+}
 
 export function FamilyScreen() {
   const nav = useNavigation<Nav>();
   const profile = useActiveProfile();
+  const accent = useAccent().color;
   const members = useQuery({ queryKey: ["family"], queryFn: familyApi.list });
 
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.eyebrow}>Family</Text>
-          <Text style={styles.title}>Who&apos;s styling?</Text>
+          <Text style={styles.eyebrow}>FAMILY</Text>
+          <Text style={styles.title}>WHO&apos;S STYLING?</Text>
         </View>
-        <Pressable style={styles.addButton} onPress={() => nav.navigate("AddMember")}>
-          <Text style={styles.addButtonText}>+ Add</Text>
+        <Pressable
+          style={[styles.addButton, { backgroundColor: accent }]}
+          onPress={() => nav.navigate("AddMember")}
+        >
+          <PlusIcon size={14} color="#0A0B0E" />
+          <Text style={styles.addButtonText}>ADD</Text>
         </Pressable>
       </View>
 
       <Pressable
-        style={[styles.row, profile.ownerKind === "user" && styles.rowActive]}
+        style={[styles.row, profile.ownerKind === "user" && { borderColor: accent }]}
         onPress={() => profile.reset()}
       >
-        <Text style={styles.rowAvatar}>👤</Text>
+        <Monogram name="You" tint={accent} />
         <View style={{ flex: 1 }}>
           <Text style={styles.rowName}>You</Text>
-          <Text style={styles.rowKind}>Guardian</Text>
+          <View style={[styles.kindTag, { borderColor: accent }]}>
+            <Text style={[styles.kindTagText, { color: accent }]}>GUARDIAN</Text>
+          </View>
         </View>
-        {profile.ownerKind === "user" && <Text style={styles.dot}>•</Text>}
+        {profile.ownerKind === "user" && <CheckIcon size={14} color={accent} />}
       </Pressable>
 
       <FlatList
@@ -47,18 +67,18 @@ export function FamilyScreen() {
           const active = profile.ownerId === item.id;
           return (
             <Pressable
-              style={[styles.row, active && styles.rowActive]}
+              style={[styles.row, active && { borderColor: accent }]}
               onPress={() => profile.setFamilyMember(item)}
             >
-              <Text style={styles.rowAvatar}>{item.kind === "kid" ? "🧒" : item.kind === "teen" ? "🧑" : "👤"}</Text>
+              <Monogram name={item.display_name} tint={active ? accent : palette.textMuted} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowName}>{item.display_name}</Text>
                 <Text style={styles.rowKind}>
-                  {item.kind}
-                  {item.kid_mode && " · Kid mode"}
+                  {item.kind.toUpperCase()}
+                  {item.kid_mode && "  ·  KID MODE"}
                 </Text>
               </View>
-              {active && <Text style={styles.dot}>•</Text>}
+              {active && <CheckIcon size={14} color={accent} />}
             </Pressable>
           );
         }}
@@ -82,28 +102,75 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: spacing(5),
   },
-  eyebrow: { color: palette.textMuted, fontSize: 12, letterSpacing: 1, textTransform: "uppercase" },
-  title: { color: palette.text, fontSize: 28, fontWeight: "700", marginTop: 4 },
-  addButton: {
-    backgroundColor: palette.accent,
-    paddingHorizontal: spacing(4),
-    paddingVertical: spacing(2),
-    borderRadius: radii.pill,
+  eyebrow: {
+    color: palette.textMuted,
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 2.5,
   },
-  addButtonText: { color: palette.background, fontWeight: "700" },
-  row: {
+  title: {
+    color: palette.text,
+    fontFamily: fonts.display,
+    fontSize: 24,
+    marginTop: 6,
+    letterSpacing: 0.5,
+  },
+  addButton: {
     flexDirection: "row",
     alignItems: "center",
+    gap: spacing(1.5),
+    paddingHorizontal: spacing(3.5),
+    paddingVertical: spacing(2),
+    borderRadius: radii.sm,
+  },
+  addButtonText: {
+    color: "#0A0B0E",
+    fontFamily: fonts.bodyBold,
+    fontSize: 11.5,
+    letterSpacing: 1.5,
+  },
+  row: {
+    ...glass,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing(3.5),
     padding: spacing(4),
     marginHorizontal: spacing(5),
-    marginBottom: spacing(2),
-    backgroundColor: palette.surface,
+    marginBottom: spacing(2.5),
     borderRadius: radii.md,
   },
-  rowActive: { borderWidth: 1, borderColor: palette.accent },
-  rowAvatar: { fontSize: 28, marginRight: spacing(4) },
-  rowName: { color: palette.text, fontWeight: "600", fontSize: 16 },
-  rowKind: { color: palette.textMuted, fontSize: 12, textTransform: "capitalize" },
-  dot: { color: palette.accent, fontSize: 30 },
-  empty: { color: palette.textMuted, padding: spacing(6), textAlign: "center" },
+  monogram: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1.5,
+    backgroundColor: palette.surfaceAlt,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  monogramText: { fontFamily: fonts.display, fontSize: 16 },
+  rowName: { color: palette.text, fontFamily: fonts.bodyBold, fontSize: 15.5 },
+  kindTag: {
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: spacing(1.5),
+    paddingVertical: 2,
+    marginTop: spacing(1.5),
+  },
+  kindTagText: { fontFamily: fonts.mono, fontSize: 8.5, letterSpacing: 1.8 },
+  rowKind: {
+    color: palette.textMuted,
+    fontFamily: fonts.mono,
+    fontSize: 10,
+    letterSpacing: 1.2,
+    marginTop: spacing(1.5),
+  },
+  empty: {
+    color: palette.textMuted,
+    fontFamily: fonts.body,
+    padding: spacing(6),
+    textAlign: "center",
+    lineHeight: 20,
+  },
 });

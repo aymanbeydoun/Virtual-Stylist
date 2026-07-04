@@ -13,7 +13,7 @@ export function AppBackground() {
   const accent = useAccent();
 
   const stops = (
-    design.fromAccent ? [`${accent.color}55`, "#0F172A", "#020617"] : [...design.colors]
+    design.fromAccent ? [`${accent.color}40`, "#0A0B0E", "#060709"] : [...design.colors]
   ) as [string, string, ...string[]];
 
   return <LinearGradient colors={stops} style={StyleSheet.absoluteFill} />;
