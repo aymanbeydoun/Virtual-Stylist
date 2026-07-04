@@ -254,26 +254,26 @@ function generateReply(
   if (/(colou?r|loud|bright|too much|busy)/.test(t)) {
     return [
       "Got it — I'll tone the colours down and lean into calmer, chiller pieces. 🌿",
-      "Tap “Staile me” again on the Style tab and I'll serve a more muted version.",
+      "Tap “STaiLE ME” again on the Style tab and I'll serve a more muted version.",
     ];
   }
   if (/(shirt|top|tee|blouse)/.test(t)) {
-    return ["No problem — I'll swap the top for something that fits the mood better. 👕 Re-run “Staile me” to see it."];
+    return ["No problem — I'll swap the top for something that fits the mood better. 👕 Re-run “STaiLE ME” to see it."];
   }
   if (/(pant|trouser|bottom|jean|short|skirt)/.test(t)) {
-    return ["Sure — I'll rethink the bottoms and keep the rest. 👖 Re-run “Staile me” for the update."];
+    return ["Sure — I'll rethink the bottoms and keep the rest. 👖 Re-run “STaiLE ME” for the update."];
   }
   if (/(shoe|sneaker|heel|boot)/.test(t)) {
-    return ["On it — different shoes coming up. 👟 Re-run “Staile me” to refresh."];
+    return ["On it — different shoes coming up. 👟 Re-run “STaiLE ME” to refresh."];
   }
   if (/(chill|casual|relax|comfy|cozy|softer)/.test(t)) {
-    return ["Say less — I'll make the whole fit chiller and more relaxed. 😌 Re-run “Staile me”."];
+    return ["Say less — I'll make the whole fit chiller and more relaxed. 😌 Re-run “STaiLE ME”."];
   }
   if (/(formal|fancy|smart|dressy|elegant)/.test(t)) {
-    return ["Let's dress it up a notch — sharper and more polished. 🎩 Re-run “Staile me”."];
+    return ["Let's dress it up a notch — sharper and more polished. 🎩 Re-run “STaiLE ME”."];
   }
   if (/(warm|cold|rain|hot|weather)/.test(t)) {
-    return ["Good thinking — I'll factor the weather in and adjust the layers. 🌤️ Re-run “Staile me”."];
+    return ["Good thinking — I'll factor the weather in and adjust the layers. 🌤️ Re-run “STaiLE ME”."];
   }
   if (/(love|perfect|great|nice|awesome|amazing|thank)/.test(t)) {
     return ["Yay! So glad you like it. 🤩 I'm always here if you want to tweak anything."];
@@ -285,7 +285,7 @@ function generateReply(
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: palette.background },
+  root: { flex: 1, backgroundColor: "transparent" },
   contextCard: {
     backgroundColor: palette.surface,
     borderRadius: radii.md,

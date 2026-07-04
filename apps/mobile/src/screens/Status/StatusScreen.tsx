@@ -92,7 +92,7 @@ export function StatusScreen() {
         </View>
 
         <Text style={styles.footnote}>
-          Open Stail Me on new days to keep your streak climbing. Every level
+          Open STaiLE ME on new days to keep your streak climbing. Every level
           unlocks a fresh colour and title.
         </Text>
       </ScrollView>
@@ -101,7 +101,7 @@ export function StatusScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: palette.background },
+  root: { flex: 1, backgroundColor: "transparent" },
   hero: {
     alignItems: "center",
     borderWidth: 1.5,

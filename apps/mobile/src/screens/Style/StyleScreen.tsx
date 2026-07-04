@@ -56,7 +56,7 @@ export function StyleScreen() {
       <ScrollView contentContainerStyle={{ padding: spacing(5) }}>
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.eyebrow}>Staile Me</Text>
+            <Text style={styles.eyebrow}>STaiLE ME</Text>
             <Text style={styles.title}>
               {profile.isKidMode ? `Hey ${profile.ownerLabel}!` : "What's the move?"}
             </Text>
@@ -99,7 +99,7 @@ export function StyleScreen() {
             <ActivityIndicator color={palette.background} />
           ) : (
             <Text style={styles.ctaText}>
-              {profile.isKidMode ? "Staile my mission ✨" : "Staile me"}
+              {profile.isKidMode ? "STaiLE my mission ✨" : "STaiLE ME"}
             </Text>
           )}
         </Pressable>
@@ -236,7 +236,7 @@ function OutfitCard({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: palette.background },
+  root: { flex: 1, backgroundColor: "transparent" },
   header: { flexDirection: "row", alignItems: "center", gap: spacing(3), marginBottom: spacing(2) },
   eyebrow: { color: palette.textMuted, fontSize: 12, letterSpacing: 1, textTransform: "uppercase" },
   title: { color: palette.text, fontSize: 28, fontWeight: "700", marginTop: 4 },

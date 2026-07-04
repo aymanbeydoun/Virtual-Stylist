@@ -95,7 +95,7 @@ export function AddMemberScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: palette.background, padding: spacing(5) },
+  root: { flex: 1, backgroundColor: "transparent", padding: spacing(5) },
   label: {
     color: palette.textMuted,
     fontSize: 12,

@@ -1,9 +1,16 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/state/auth";
 import { useActiveProfile } from "@/state/profile";
-import { ACCENT_THEMES, useTheme } from "@/state/theme";
+import {
+  ACCENT_THEMES,
+  BACKGROUND_DESIGNS,
+  useAccent,
+  useTheme,
+  type BackgroundDesign,
+} from "@/state/theme";
 import { palette, radii, spacing } from "@/theme";
 
 export function YouScreen() {
@@ -12,7 +19,17 @@ export function YouScreen() {
   const profile = useActiveProfile();
   const accentId = useTheme((s) => s.accentId);
   const setAccent = useTheme((s) => s.setAccent);
-  const activeColor = ACCENT_THEMES.find((t) => t.id === accentId)?.color ?? palette.accent;
+  const backgroundId = useTheme((s) => s.backgroundId);
+  const setBackground = useTheme((s) => s.setBackground);
+  const accent = useAccent();
+  const activeColor = accent.color;
+
+  const designStops = (d: BackgroundDesign): [string, string, ...string[]] =>
+    (d.fromAccent ? [`${accent.color}88`, "#0F172A", "#020617"] : [...d.colors]) as [
+      string,
+      string,
+      ...string[],
+    ];
 
   return (
     <SafeAreaView style={styles.root}>
@@ -50,6 +67,32 @@ export function YouScreen() {
           })}
         </View>
 
+        <Text style={styles.section}>Background design</Text>
+        <Text style={styles.hint}>Give the black backdrop some character.</Text>
+        <View style={styles.designs}>
+          {BACKGROUND_DESIGNS.map((d) => {
+            const selected = d.id === backgroundId;
+            return (
+              <Pressable
+                key={d.id}
+                style={styles.designWrap}
+                onPress={() => setBackground(d.id)}
+                accessibilityLabel={`${d.name} background`}
+              >
+                <LinearGradient
+                  colors={designStops(d)}
+                  style={[styles.designPreview, selected && { borderColor: activeColor }]}
+                >
+                  {selected && <Text style={[styles.designCheck, { color: activeColor }]}>✓</Text>}
+                </LinearGradient>
+                <Text style={[styles.designName, selected && { color: activeColor, fontWeight: "700" }]}>
+                  {d.name}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         <Pressable style={[styles.button, { backgroundColor: activeColor }]} onPress={() => signOut()}>
           <Text style={styles.buttonText}>Sign out</Text>
         </Pressable>
@@ -59,7 +102,7 @@ export function YouScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: palette.background },
+  root: { flex: 1, backgroundColor: "transparent" },
   eyebrow: { color: palette.textMuted, fontSize: 12, letterSpacing: 1, textTransform: "uppercase" },
   title: { color: palette.text, fontSize: 28, fontWeight: "700", marginTop: 4 },
   body: { color: palette.textMuted, marginTop: spacing(4) },
@@ -79,6 +122,19 @@ const styles = StyleSheet.create({
   swatchSelected: { borderColor: palette.text },
   check: { color: palette.background, fontWeight: "900", fontSize: 20 },
   swatchName: { color: palette.textMuted, fontSize: 12, marginTop: spacing(1) },
+  designs: { flexDirection: "row", flexWrap: "wrap", gap: spacing(3) },
+  designWrap: { alignItems: "center", width: 96 },
+  designPreview: {
+    width: 96,
+    height: 60,
+    borderRadius: radii.md,
+    borderWidth: 2,
+    borderColor: palette.surfaceAlt,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  designCheck: { fontWeight: "900", fontSize: 22 },
+  designName: { color: palette.textMuted, fontSize: 12, marginTop: spacing(1) },
   button: {
     padding: spacing(4),
     borderRadius: radii.md,

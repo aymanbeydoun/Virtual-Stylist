@@ -65,7 +65,7 @@ export function FamilyScreen() {
         ListEmptyComponent={
           !members.isLoading ? (
             <Text style={styles.empty}>
-              Add a sub-profile for a child or teen. Kid sub-profiles are COPPA-protected.
+              Add a sub-profile for a family member. Kid sub-profiles are COPPA-protected.
             </Text>
           ) : null
         }
@@ -75,7 +75,7 @@ export function FamilyScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: palette.background },
+  root: { flex: 1, backgroundColor: "transparent" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",

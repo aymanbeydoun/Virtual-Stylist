@@ -33,7 +33,7 @@ export function OutfitDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: palette.background, padding: spacing(5) },
+  root: { flex: 1, backgroundColor: "transparent", padding: spacing(5) },
   title: { color: palette.text, fontSize: 22, fontWeight: "700", marginBottom: spacing(6) },
   button: {
     backgroundColor: palette.surface,

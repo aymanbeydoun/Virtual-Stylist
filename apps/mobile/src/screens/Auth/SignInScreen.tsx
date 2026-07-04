@@ -14,7 +14,7 @@ export function SignInScreen() {
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.inner}>
-        <Text style={styles.title}>Staile Me</Text>
+        <Text style={styles.title}>STaiLE ME</Text>
         <Text style={styles.subtitle}>
           Your personal AI stylist is ready! ✨ Pop in your name and let&apos;s
           create outfits you&apos;ll absolutely love!
@@ -40,7 +40,7 @@ export function SignInScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: palette.background },
+  root: { flex: 1, backgroundColor: "transparent" },
   inner: { flex: 1, padding: spacing(6), justifyContent: "center" },
   title: { fontSize: 36, fontWeight: "700", color: palette.text, marginBottom: spacing(2) },
   subtitle: { color: palette.textMuted, marginBottom: spacing(8) },

@@ -83,7 +83,7 @@ function Field({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: palette.background },
+  root: { flex: 1, backgroundColor: "transparent" },
   loading: { color: palette.text, padding: spacing(6) },
   image: {
     width: "100%",

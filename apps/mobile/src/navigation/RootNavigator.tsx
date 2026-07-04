@@ -41,6 +41,7 @@ function Tabs() {
   const activeColor = useAccent().color;
   return (
     <Tab.Navigator
+      sceneContainerStyle={{ backgroundColor: "transparent" }}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: activeColor,
@@ -77,8 +78,8 @@ export function RootNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
-        contentStyle: { backgroundColor: palette.background },
-        headerStyle: { backgroundColor: palette.background },
+        contentStyle: { backgroundColor: "transparent" },
+        headerStyle: { backgroundColor: "transparent" },
         headerTintColor: palette.text,
       }}
     >

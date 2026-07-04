@@ -33,7 +33,7 @@ export function ClosetScreen() {
 
       <Text style={styles.subtitle}>
         Here&apos;s an example wardrobe to try things out. Head to ✨ Style and tap
-        Staile me!
+        STaiLE ME!
       </Text>
 
       <FlatList
@@ -60,7 +60,7 @@ export function ClosetScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: palette.background },
+  root: { flex: 1, backgroundColor: "transparent" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
