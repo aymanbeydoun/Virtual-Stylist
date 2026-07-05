@@ -1,11 +1,13 @@
 import { StyleSheet, Text, View } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import Svg, { Circle, Path } from "react-native-svg";
 
 import { fonts } from "@/theme";
 
 /**
- * Bespoke geometric insignias for the 16 progression ranks — streetwear badge
- * vectors instead of generic circles. The silhouette sharpens as you climb:
+ * Bespoke geometric insignias for the 16 progression ranks — trademark-grade
+ * badge vectors, like a fashion house's seal. The silhouette sharpens as you
+ * climb, and each rank carries its own inner mark (crosshair, seal ring,
+ * notch bars, orbit points) so every level is a unique collectible:
  *
  *   1–4   Shard    (angular shield — the grind begins)
  *   5–8   Diamond  (cut and confident)
@@ -22,6 +24,28 @@ function shapeFor(level: number): string {
   if (level >= 9) return "M24 3 L42 13.5 L42 34.5 L24 45 L6 34.5 L6 13.5 Z";
   if (level >= 5) return "M24 4 L44 24 L24 44 L4 24 Z";
   return "M24 3 L42 12 L38 40 L24 45 L10 40 L6 12 Z";
+}
+
+/** Per-rank inner trademark mark — varies within each silhouette band. */
+function InnerMark({ level, tone }: { level: number; tone: string }) {
+  const common = { stroke: tone, strokeWidth: 1.4, fill: "none" as const };
+  switch (level % 4) {
+    case 1: // seal ring
+      return <Circle cx={24} cy={24} r={12} {...common} />;
+    case 2: // brutalist crosshair
+      return (
+        <Path d="M24 10 V16 M24 32 V38 M10 24 H16 M32 24 H38" {...common} strokeWidth={1.6} />
+      );
+    case 3: // twin notch bars
+      return <Path d="M17 13 H31 M17 35 H31" {...common} strokeWidth={1.8} />;
+    default: // orbit points
+      return (
+        <>
+          <Circle cx={12.5} cy={24} r={1.8} fill={tone} />
+          <Circle cx={35.5} cy={24} r={1.8} fill={tone} />
+        </>
+      );
+  }
 }
 
 export function LevelInsignia({
@@ -47,6 +71,10 @@ export function LevelInsignia({
           strokeOpacity={reached ? 1 : 0.55}
           strokeWidth={reached ? 1 : 1.5}
           strokeLinejoin="round"
+        />
+        <InnerMark
+          level={level}
+          tone={reached ? "rgba(10,11,14,0.4)" : `${color}55`}
         />
       </Svg>
       {showNumber && (

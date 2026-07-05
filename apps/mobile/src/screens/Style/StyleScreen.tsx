@@ -13,11 +13,15 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { personalizeRationales } from "@/ai/stylistBrain";
-import { ChatIcon, ChevronIcon, PenIcon } from "@/components/icons";
+import { ChevronIcon, PenIcon } from "@/components/icons";
+import { KineticTitle } from "@/components/KineticTitle";
 import { LevelBadge } from "@/components/LevelBadge";
 import { OutfitCanvas } from "@/components/OutfitCanvas";
 import { RatingTier } from "@/components/RatingTier";
 import { RenameStylistModal } from "@/components/RenameStylistModal";
+import { StellaOrb } from "@/components/StellaOrb";
+import type { DemoItem, DemoSlot } from "@/data/demoCloset";
+import { demoItemsBySlot } from "@/data/demoCloset";
 import {
   KID_OCCASIONS,
   KID_VIBES,
@@ -27,6 +31,7 @@ import {
   type VibeOption,
 } from "@/data/style";
 import { stailMe, type DemoOutfit } from "@/demo/stylist";
+import { hapticHeavyClick, hapticPress, hapticSuccess } from "@/lib/haptics";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { aiBrainEnabled } from "@/state/aiBrain";
 import { useAura } from "@/state/aura";
@@ -60,8 +65,20 @@ export function StyleScreen() {
 
   const setAura = useAura((s) => s.setAura);
 
+  // Generative ambient canvas: the backdrop reacts the moment a vibe lands.
+  const pickVibe = (v: VibeOption) => {
+    hapticHeavyClick();
+    setVibe(v);
+    setAura(auraForVibe(v.id));
+  };
+  const pickOccasion = (o: OccasionOption) => {
+    hapticHeavyClick();
+    setOccasion(o);
+  };
+
   const onStaileMe = () => {
     if (!vibe || !occasion) return;
+    hapticPress();
     setLoading(true);
     setOutfits(null);
     // The canvas breathes into the vibe's aura while the stylist "thinks".
@@ -70,6 +87,7 @@ export function StyleScreen() {
       const looks = stailMe(vibe.label, occasion.label);
       setOutfits(looks);
       setLoading(false);
+      hapticSuccess();
 
       // With the AI brain on, Stella writes personalised rationales; the
       // built-in ones stay if the call fails or no key is saved.
@@ -101,9 +119,11 @@ export function StyleScreen() {
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
             <Text style={styles.eyebrow}>STaiLE ME</Text>
-            <Text style={styles.title}>
-              {profile.isKidMode ? `HEY ${profile.ownerLabel.toUpperCase()}!` : "WHAT'S THE MOVE?"}
-            </Text>
+            <KineticTitle
+              text={profile.isKidMode ? `HEY ${profile.ownerLabel.toUpperCase()}!` : "WHAT'S THE MOVE?"}
+              trigger={`${vibe?.id ?? "-"}|${occasion?.id ?? "-"}`}
+              style={styles.title}
+            />
           </View>
           <LevelBadge onPress={() => nav.navigate("Status")} />
         </View>
@@ -116,7 +136,7 @@ export function StyleScreen() {
               label={v.label}
               active={vibe?.id === v.id}
               accent={accent}
-              onPress={() => setVibe(v)}
+              onPress={() => pickVibe(v)}
             />
           ))}
         </View>
@@ -129,7 +149,7 @@ export function StyleScreen() {
               label={o.label}
               active={occasion?.id === o.id}
               accent={accent}
-              onPress={() => setOccasion(o)}
+              onPress={() => pickOccasion(o)}
             />
           ))}
         </View>
@@ -153,7 +173,10 @@ export function StyleScreen() {
         </Pressable>
 
         {loading && (
-          <Text style={styles.thinking}>{aiName.toUpperCase()} IS PUTTING LOOKS TOGETHER…</Text>
+          <View style={styles.thinkingRow}>
+            <StellaOrb size={26} color={accent} thinking />
+            <Text style={styles.thinking}>{aiName.toUpperCase()} IS COMPOSING…</Text>
+          </View>
         )}
 
         {outfits && (
@@ -250,6 +273,20 @@ function OutfitCard({
   onEditName: () => void;
 }) {
   const [rating, setRating] = useState<number | null>(null);
+  // Live layer state — flick-to-swap replaces single pieces on the canvas.
+  const [items, setItems] = useState<DemoItem[]>(outfit.items);
+
+  const swapLayer = (slot: DemoSlot, dir: 1 | -1) => {
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.slot !== slot) return item;
+        const options = demoItemsBySlot(slot);
+        if (options.length < 2) return item;
+        const at = options.findIndex((o) => o.id === item.id);
+        return options[(at + dir + options.length) % options.length] ?? item;
+      }),
+    );
+  };
 
   return (
     <View style={[styles.outfit, { width }]}>
@@ -260,28 +297,32 @@ function OutfitCard({
         </Text>
       </View>
 
-      {/* Lookbook collage — pieces overlap like a curated sketch. */}
-      <OutfitCanvas items={outfit.items} />
+      {/* Lookbook canvas — flick or tap a piece to carousel that layer. */}
+      <OutfitCanvas items={items} onSwap={swapLayer} />
       <Text style={styles.pieces} numberOfLines={1}>
-        {outfit.items.map((i) => i.name.toUpperCase()).join("  ·  ")}
+        {items.map((i) => i.name.toUpperCase()).join("  ·  ")}
       </Text>
+      <Text style={styles.swapHint}>FLICK A PIECE TO SWAP IT</Text>
 
       <View style={styles.divider} />
 
       <RatingTier value={rating} accent={accent} onChange={setRating} />
 
-      {/* AI's rationale */}
-      <Text style={styles.rationale}>
-        <Text style={[styles.rationaleName, { color: accent }]}>{aiName}&apos;s choice — </Text>
-        {outfit.rationale}
-      </Text>
+      {/* Editorial rationale — a magazine pull-quote, not body text. */}
+      <View style={styles.editorial}>
+        <View style={[styles.editorialBar, { backgroundColor: accent }]} />
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.editorialKicker, { color: accent }]}>
+            {aiName.toUpperCase()}&apos;S CHOICE — NO. {String(index + 1).padStart(2, "0")}
+          </Text>
+          <Text style={styles.editorialQuote}>{outfit.rationale}</Text>
+        </View>
+      </View>
 
-      {/* Premium chat action bar + rename */}
+      {/* Stella anchor + rename */}
       <View style={styles.chatRow}>
         <Pressable style={styles.chatBtn} onPress={onChat}>
-          <View style={[styles.chatIconWell, { borderColor: accent }]}>
-            <ChatIcon size={15} color={accent} />
-          </View>
+          <StellaOrb size={30} color={accent} />
           <Text style={styles.chatBtnText}>CHAT TO {aiName.toUpperCase()}</Text>
           <ChevronIcon size={15} color={palette.textMuted} />
         </Pressable>
@@ -366,13 +407,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     letterSpacing: 2.5,
   },
+  thinkingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing(2.5),
+    marginTop: spacing(4),
+  },
   thinking: {
     color: palette.textMuted,
     fontFamily: fonts.mono,
     fontSize: 10.5,
     letterSpacing: 1.8,
     textAlign: "center",
-    marginTop: spacing(4),
   },
   outfit: {
     ...glass,
@@ -399,19 +446,38 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     marginTop: spacing(2.5),
   },
+  swapHint: {
+    color: palette.textMuted,
+    fontFamily: fonts.mono,
+    fontSize: 8,
+    letterSpacing: 2,
+    opacity: 0.65,
+    marginTop: spacing(1.5),
+  },
   divider: {
     height: 1,
     backgroundColor: palette.hairlineFaint,
     marginVertical: spacing(3.5),
   },
-  rationale: {
-    color: palette.text,
-    fontFamily: fonts.body,
-    fontSize: 13.5,
+  editorial: {
+    flexDirection: "row",
+    gap: spacing(3),
     marginTop: spacing(4),
-    lineHeight: 20,
+    paddingRight: spacing(5),
   },
-  rationaleName: { fontFamily: fonts.bodyBold },
+  editorialBar: { width: 3.5, borderRadius: 2, alignSelf: "stretch" },
+  editorialKicker: {
+    fontFamily: fonts.mono,
+    fontSize: 9,
+    letterSpacing: 2,
+  },
+  editorialQuote: {
+    color: palette.text,
+    fontFamily: fonts.bodyMedium,
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: spacing(1.5),
+  },
   chatRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -429,14 +495,6 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     paddingVertical: spacing(2.5),
     paddingHorizontal: spacing(3),
-  },
-  chatIconWell: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
   },
   chatBtnText: {
     flex: 1,

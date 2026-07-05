@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { RATINGS } from "@/data/ratings";
+import { hapticSelect } from "@/lib/haptics";
 import { fonts, palette, spacing } from "@/theme";
 
 /**
@@ -27,7 +28,10 @@ export function RatingTier({
           return (
             <Pressable
               key={r.value}
-              onPress={() => onChange(r.value)}
+              onPress={() => {
+                hapticSelect();
+                onChange(r.value);
+              }}
               style={styles.segmentHit}
               accessibilityRole="button"
               accessibilityLabel={`Rate ${r.label}`}

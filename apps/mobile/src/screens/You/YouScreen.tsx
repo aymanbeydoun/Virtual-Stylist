@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CheckIcon } from "@/components/icons";
+import { hapticSelect } from "@/lib/haptics";
 import { useAiBrain } from "@/state/aiBrain";
 import { useAura } from "@/state/aura";
 import { useAuth } from "@/state/auth";
@@ -58,7 +59,10 @@ export function YouScreen() {
                 <Pressable
                   key={t.id}
                   style={styles.swatchWrap}
-                  onPress={() => setAccent(t.id)}
+                  onPress={() => {
+                    hapticSelect();
+                    setAccent(t.id);
+                  }}
                   accessibilityLabel={`${t.name} accent`}
                 >
                   <View
@@ -94,6 +98,7 @@ export function YouScreen() {
                   key={d.id}
                   style={styles.designWrap}
                   onPress={() => {
+                    hapticSelect();
                     // Manual backdrop choice takes over from any live aura.
                     useAura.getState().setAura(null);
                     setBackground(d.id);

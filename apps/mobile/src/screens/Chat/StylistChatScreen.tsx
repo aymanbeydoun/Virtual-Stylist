@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { chatWithStella } from "@/ai/stylistBrain";
 import { SendIcon } from "@/components/icons";
+import { hapticSelect } from "@/lib/haptics";
 import { quoteForToday } from "@/data/quotes";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { aiBrainEnabled } from "@/state/aiBrain";
@@ -80,6 +81,7 @@ export function StylistChatScreen() {
   const send = async () => {
     const text = input.trim();
     if (!text) return;
+    hapticSelect();
     setInput("");
     const userMessage: Message = { id: nextId(), from: "user", text };
     const history = [...messages, userMessage];

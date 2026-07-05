@@ -10,6 +10,7 @@ import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ThemeEngine } from "@/components/ThemeEngine";
@@ -51,16 +52,18 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <View style={{ flex: 1 }}>
-          <ThemeEngine />
-          <NavigationContainer theme={navTheme}>
-            <RootNavigator />
-            <StatusBar style="light" />
-          </NavigationContainer>
-        </View>
-      </QueryClientProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <View style={{ flex: 1 }}>
+            <ThemeEngine />
+            <NavigationContainer theme={navTheme}>
+              <RootNavigator />
+              <StatusBar style="light" />
+            </NavigationContainer>
+          </View>
+        </QueryClientProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

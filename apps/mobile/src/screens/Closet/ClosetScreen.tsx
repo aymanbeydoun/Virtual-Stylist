@@ -3,6 +3,7 @@ import { FlatList, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { GarmentIcon } from "@/components/GarmentIcon";
+import { GalleryShadow } from "@/components/OutfitCanvas";
 import { DEMO_CLOSET, type DemoItem } from "@/data/demoCloset";
 import { useActiveProfile } from "@/state/profile";
 import { useAccent } from "@/state/theme";
@@ -52,6 +53,9 @@ export function ClosetScreen() {
           <View style={styles.card}>
             <LinearGradient colors={CARD_BACKDROP} style={styles.garmentWell}>
               <GarmentIcon kind={item.icon} color={item.color} size={92} />
+              <View style={styles.shadowSeat}>
+                <GalleryShadow width={80} />
+              </View>
             </LinearGradient>
             <View style={styles.cardMeta}>
               <Text style={styles.cardName} numberOfLines={1}>
@@ -120,6 +124,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  shadowSeat: { marginTop: -8 },
   cardMeta: {
     borderTopWidth: 1,
     borderTopColor: palette.hairlineFaint,
