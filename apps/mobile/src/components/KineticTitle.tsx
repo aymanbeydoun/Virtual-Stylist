@@ -55,22 +55,44 @@ export function KineticTitle({
   style?: TextStyle;
 }) {
   const kick = useSharedValue(1);
-  const chars = [...text];
+  const words = text.split(" ");
+  const count = [...text].length;
 
   useEffect(() => {
     kick.value = 0;
     kick.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) });
   }, [trigger, text, kick]);
 
+  // Letters are grouped per word so lines only wrap at word boundaries —
+  // never in the middle of a word.
+  let letterIndex = 0;
   return (
     <View style={styles.row} accessibilityRole="header" accessibilityLabel={text}>
-      {chars.map((c, i) => (
-        <Letter key={`${i}-${c}`} char={c} index={i} count={chars.length} kick={kick} style={style} />
-      ))}
+      {words.map((word, w) => {
+        const letters = [...word];
+        const startIndex = letterIndex;
+        letterIndex += letters.length + 1; // +1 keeps the stagger flowing across spaces
+        return (
+          <View key={`${w}-${word}`} style={styles.word}>
+            {letters.map((c, i) => (
+              <Letter
+                key={`${startIndex + i}-${c}`}
+                char={c}
+                index={startIndex + i}
+                count={count}
+                kick={kick}
+                style={style}
+              />
+            ))}
+            {w < words.length - 1 && <Animated.Text style={style}> </Animated.Text>}
+          </View>
+        );
+      })}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", flexWrap: "wrap" },
+  word: { flexDirection: "row" },
 });
