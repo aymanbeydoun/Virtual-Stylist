@@ -24,6 +24,14 @@ def test_dashboard_served_at_root(client: TestClient) -> None:
     assert "Run Compliance Audit" in response.text
 
 
+def test_dashboard_fonts_self_hosted(client: TestClient) -> None:
+    """The UI's typeface ships with the app — no CDN, works offline."""
+    assert 'src: url("/static/fonts/' in client.get("/").text
+    response = client.get("/static/fonts/ibm-plex-sans-latin-400.woff2")
+    assert response.status_code == 200
+    assert response.content.startswith(b"wOF2")
+
+
 def test_audit_endpoint_end_to_end(client: TestClient) -> None:
     response = client.post(
         "/api/v1/audits",

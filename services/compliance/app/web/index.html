@@ -4,175 +4,442 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BFL Compliance &amp; Audit Agent</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23eaa640'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='17' font-weight='bold' text-anchor='middle' fill='%230e1216'%3EB%3C/text%3E%3C/svg%3E">
 <style>
+  /* ---- self-hosted type (IBM Plex) ---- */
+  @font-face { font-family: "Plex Sans"; font-weight: 400; font-display: swap;
+    src: url("/static/fonts/ibm-plex-sans-latin-400.woff2") format("woff2"); }
+  @font-face { font-family: "Plex Sans"; font-weight: 500; font-display: swap;
+    src: url("/static/fonts/ibm-plex-sans-latin-500.woff2") format("woff2"); }
+  @font-face { font-family: "Plex Sans"; font-weight: 600; font-display: swap;
+    src: url("/static/fonts/ibm-plex-sans-latin-600.woff2") format("woff2"); }
+  @font-face { font-family: "Plex Sans"; font-weight: 700; font-display: swap;
+    src: url("/static/fonts/ibm-plex-sans-latin-700.woff2") format("woff2"); }
+  @font-face { font-family: "Plex Mono"; font-weight: 400; font-display: swap;
+    src: url("/static/fonts/ibm-plex-mono-latin-400.woff2") format("woff2"); }
+  @font-face { font-family: "Plex Mono"; font-weight: 600; font-display: swap;
+    src: url("/static/fonts/ibm-plex-mono-latin-600.woff2") format("woff2"); }
+
   :root {
-    --bg: #0f1418; --panel: #161d23; --panel-2: #1c242c; --line: #2a343d;
-    --ink: #e8edf2; --muted: #93a1ad; --faint: #5d6b76;
-    --green: #2fa36b; --amber: #d99a2b; --red: #d94f41; --blue: #4c8dc4;
-    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
-    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --bg: #0e1216; --panel: #151b21; --panel-2: #1a222b; --field: #10161c;
+    --line: #28323c; --line-soft: #1f2831;
+    --ink: #edf2f6; --muted: #9cabb8; --faint: #66757f;
+    --accent: #eaa640; --accent-ink: #101418;
+    --green: #38b27b; --amber: #e0a63d; --red: #e05a4b; --blue: #5f9bd0;
+    --sans: "Plex Sans", "Segoe UI", "Helvetica Neue", sans-serif;
+    --mono: "Plex Mono", ui-monospace, "Cascadia Mono", Menlo, monospace;
+    --r: 10px; --shadow: 0 10px 30px rgba(0,0,0,.35);
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); line-height: 1.5; }
-  header { border-bottom: 1px solid var(--line); padding: 22px 28px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
-  header h1 { font-size: 19px; margin: 0; letter-spacing: .4px; }
-  header h1 .tag { color: var(--amber); }
-  header p { margin: 0; color: var(--muted); font-size: 13px; }
-  main { display: grid; grid-template-columns: 400px 1fr; gap: 24px; padding: 24px 28px 60px; max-width: 1440px; margin: 0 auto; }
-  @media (max-width: 980px) { main { grid-template-columns: 1fr; } }
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
-  .panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 1.4px; color: var(--muted); margin: 0 0 12px; }
-  label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
-  input[type=text], textarea { width: 100%; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-family: var(--sans); font-size: 14px; }
-  textarea { resize: vertical; min-height: 56px; }
-  input:focus, textarea:focus { outline: none; border-color: var(--blue); }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 400 14px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
+  ::selection { background: rgba(234,166,64,.3); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  button { font-family: var(--sans); }
 
-  #dropzone { margin-top: 16px; border: 1.5px dashed var(--faint); border-radius: 10px; padding: 26px 16px; text-align: center; color: var(--muted); cursor: pointer; transition: border-color .15s, background .15s; }
-  #dropzone.drag { border-color: var(--blue); background: rgba(76,141,196,.08); }
-  #dropzone strong { color: var(--ink); }
-  #dropzone .hint { font-size: 12px; color: var(--faint); margin-top: 6px; }
+  .kicker { font: 600 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase;
+            color: var(--faint); }
 
-  #filelist { list-style: none; margin: 12px 0 0; padding: 0; font-family: var(--mono); font-size: 12.5px; }
-  #filelist li { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 6px; background: var(--panel-2); }
-  #filelist .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #filelist .size { color: var(--faint); }
-  #filelist button { background: none; border: none; color: var(--red); cursor: pointer; font-size: 14px; padding: 0 2px; }
+  /* ---- header ---- */
+  header { display: flex; align-items: center; gap: 14px; padding: 14px 26px;
+           border-bottom: 1px solid var(--line-soft);
+           background: linear-gradient(180deg, #12181e, var(--bg)); }
+  .mark { width: 34px; height: 34px; border-radius: 8px; background: var(--accent);
+          color: var(--accent-ink); display: grid; place-items: center;
+          font: 700 17px var(--mono); flex: none; }
+  header h1 { font-size: 15.5px; font-weight: 600; margin: 0; letter-spacing: .01em; }
+  header .sub { color: var(--faint); font-size: 12.5px; margin-top: 1px; }
+  header .spacer { flex: 1; }
+  header .pill { font: 500 12px var(--mono); color: var(--muted);
+                 border: 1px solid var(--line); border-radius: 99px; padding: 5px 12px; }
 
-  #runbtn { width: 100%; margin-top: 16px; padding: 12px; font-size: 15px; font-weight: 600; color: #0d1114; background: var(--amber); border: none; border-radius: 8px; cursor: pointer; }
-  #runbtn:hover:not(:disabled) { filter: brightness(1.08); }
-  #runbtn:disabled { opacity: .45; cursor: not-allowed; }
-  #status { margin-top: 10px; font-size: 13px; color: var(--muted); min-height: 18px; }
-  #status.err { color: var(--red); }
+  /* ---- layout ---- */
+  main { display: grid; grid-template-columns: 384px minmax(0, 1fr); gap: 22px;
+         padding: 22px 26px 70px; max-width: 1480px; margin: 0 auto; align-items: start; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+  aside { position: sticky; top: 18px; display: flex; flex-direction: column; gap: 16px; }
+  @media (max-width: 1000px) { aside { position: static; } }
 
-  .checklist { margin-top: 20px; }
-  .checklist ol { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; }
-  .checklist li { margin-bottom: 4px; }
-  .checklist li::marker { color: var(--faint); }
+  .card { background: var(--panel); border: 1px solid var(--line-soft);
+          border-radius: var(--r); padding: 18px; }
+  .card h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 14px;
+             font: 600 11px/1 var(--mono); letter-spacing: .14em;
+             text-transform: uppercase; color: var(--muted); }
+  .card h2 .n { color: var(--accent); }
+
+  /* ---- dropzone ---- */
+  #dropzone { border: 1.5px dashed #3a4653; border-radius: var(--r);
+              padding: 26px 18px; text-align: center; cursor: pointer;
+              transition: border-color .15s, background .15s, transform .15s; }
+  #dropzone:hover { border-color: var(--accent); background: rgba(234,166,64,.04); }
+  #dropzone.drag { border-color: var(--accent); background: rgba(234,166,64,.09);
+                   transform: scale(1.01); }
+  #dropzone .icon { width: 38px; height: 38px; margin: 0 auto 10px; color: var(--accent); }
+  #dropzone .cta { font-weight: 600; font-size: 14.5px; }
+  #dropzone .cta u { text-decoration-color: var(--accent); text-underline-offset: 3px; }
+  #dropzone .hint { font-size: 12px; color: var(--faint); margin-top: 7px; line-height: 1.6; }
+  #dropzone .fmt { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+  #filebar { display: none; align-items: center; justify-content: space-between;
+             margin-top: 12px; font: 500 11.5px var(--mono); color: var(--muted); }
+  #filebar button { background: none; border: none; color: var(--faint); cursor: pointer;
+                    font: 500 11.5px var(--mono); padding: 2px 4px; }
+  #filebar button:hover { color: var(--red); }
+  #filelist { list-style: none; margin: 8px 0 0; padding: 0; }
+  #filelist li { display: flex; align-items: center; gap: 9px; padding: 8px 10px;
+                 border: 1px solid var(--line-soft); border-radius: 7px; margin-bottom: 6px;
+                 background: var(--panel-2); animation: slidein .18s ease; }
+  @keyframes slidein { from { opacity: 0; transform: translateY(-3px); } }
+  #filelist .ftype { font: 600 9.5px var(--mono); letter-spacing: .08em; color: var(--accent);
+                     border: 1px solid rgba(234,166,64,.35); border-radius: 4px;
+                     padding: 2px 5px; flex: none; }
+  #filelist .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                    font-size: 12.5px; }
+  #filelist .size { color: var(--faint); font: 400 11px var(--mono); flex: none; }
+  #filelist .rm { background: none; border: none; color: var(--faint); cursor: pointer;
+                  font-size: 15px; line-height: 1; padding: 2px 4px; border-radius: 4px; }
+  #filelist .rm:hover { color: var(--red); background: rgba(224,90,75,.1); }
+
+  /* ---- form ---- */
+  .fields { margin-top: 16px; }
+  .fields .opt { color: var(--faint); font-weight: 400; text-transform: none;
+                 letter-spacing: 0; font-family: var(--sans); font-size: 11.5px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  label { display: block; font-size: 12px; font-weight: 500; color: var(--muted);
+          margin: 10px 0 5px; }
+  input[type=text], textarea { width: 100%; background: var(--field); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 7px; padding: 9px 11px;
+    font: 400 13.5px var(--sans); transition: border-color .15s; }
+  input::placeholder, textarea::placeholder { color: #4d5a64; }
+  input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 52px; }
+
+  #runbtn { width: 100%; margin-top: 16px; padding: 13px; font-size: 14.5px; font-weight: 700;
+            letter-spacing: .01em; color: var(--accent-ink); background: var(--accent);
+            border: none; border-radius: 8px; cursor: pointer;
+            transition: filter .15s, transform .1s; }
+  #runbtn:hover:not(:disabled) { filter: brightness(1.09); }
+  #runbtn:active:not(:disabled) { transform: translateY(1px); }
+  #runbtn:disabled { opacity: .4; cursor: not-allowed; }
+  #status { margin-top: 10px; font-size: 12.5px; color: var(--muted); min-height: 18px; }
+  #status.err { color: #f2887b; }
+
+  /* ---- checklist card ---- */
+  details.ref summary { cursor: pointer; list-style: none; display: flex; align-items: center;
+                        gap: 8px; }
+  details.ref summary::-webkit-details-marker { display: none; }
+  details.ref summary .chev { margin-left: auto; color: var(--faint);
+                              transition: transform .15s; font-size: 11px; }
+  details.ref[open] summary .chev { transform: rotate(90deg); }
+  #checklist { margin: 12px 0 0; padding-left: 20px; color: var(--muted); font-size: 12.5px; }
+  #checklist li { margin-bottom: 6px; }
+  #checklist li::marker { color: var(--faint); font-family: var(--mono); font-size: 11px; }
+  #checklist small { display: block; color: var(--faint); font-size: 11.5px; }
+
+  /* ---- right column states ---- */
+  #placeholder { border: 1px dashed var(--line); border-radius: var(--r);
+                 padding: 60px 30px; text-align: center; }
+  #placeholder h2 { font-size: 18px; font-weight: 600; margin: 0 0 6px; }
+  #placeholder p { color: var(--muted); max-width: 520px; margin: 0 auto; }
+  .howto { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px;
+           max-width: 720px; margin: 28px auto 0; }
+  @media (max-width: 760px) { .howto { grid-template-columns: 1fr; } }
+  .howto .stepcard { background: var(--panel); border: 1px solid var(--line-soft);
+                     border-radius: 9px; padding: 16px 14px; text-align: left; }
+  .howto .stepno { font: 600 11px var(--mono); color: var(--accent); letter-spacing: .1em; }
+  .howto h3 { font-size: 13.5px; margin: 7px 0 4px; font-weight: 600; }
+  .howto p { font-size: 12.5px; color: var(--faint); margin: 0; }
+
+  #loading { display: none; border: 1px solid var(--line-soft); border-radius: var(--r);
+             background: var(--panel); padding: 46px 30px; text-align: center; }
+  .orbit { width: 44px; height: 44px; margin: 0 auto 16px; border-radius: 50%;
+           border: 3px solid var(--line); border-top-color: var(--accent);
+           animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading h2 { font-size: 16.5px; margin: 0 0 4px; }
+  #loading .elapsed { font: 600 13px var(--mono); color: var(--accent); }
+  #loading .hintline { color: var(--muted); font-size: 13px; margin-top: 10px;
+                       min-height: 20px; transition: opacity .3s; }
+  .shimmer { height: 4px; border-radius: 2px; background: var(--line-soft); overflow: hidden;
+             max-width: 380px; margin: 18px auto 0; position: relative; }
+  .shimmer::after { content: ""; position: absolute; inset: 0; width: 40%;
+                    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+                    animation: sweep 1.6s ease-in-out infinite; }
+  @keyframes sweep { from { left: -40%; } to { left: 100%; } }
+  @media (prefers-reduced-motion: reduce) {
+    .orbit, .shimmer::after { animation-duration: 8s; }
+    #dropzone.drag { transform: none; }
+  }
 
   /* ---- report ---- */
-  #placeholder { color: var(--faint); text-align: center; padding: 90px 20px; border: 1px dashed var(--line); border-radius: 10px; }
+  #report { animation: fadein .25s ease; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(4px); } }
+  #toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  #toolbar button { background: var(--panel-2); color: var(--muted);
+    border: 1px solid var(--line); border-radius: 7px; padding: 7px 13px;
+    font: 500 12.5px var(--sans); cursor: pointer; transition: color .15s, border-color .15s; }
+  #toolbar button:hover { color: var(--ink); border-color: var(--faint); }
+  #toolbar .primaryish { color: var(--accent); border-color: rgba(234,166,64,.4); }
+
   .lights { display: flex; gap: 10px; margin-bottom: 14px; }
-  .light { flex: 1; text-align: center; padding: 20px 10px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); opacity: .28; }
-  .light .dot { width: 26px; height: 26px; border-radius: 50%; margin: 0 auto 8px; }
+  .light { flex: 1; text-align: center; padding: 16px 10px 13px; border-radius: 9px;
+           border: 1px solid var(--line-soft); background: var(--panel-2); opacity: .3;
+           transition: opacity .2s; }
+  .light .dot { width: 22px; height: 22px; border-radius: 50%; margin: 0 auto 7px; }
   .light.on { opacity: 1; border-width: 2px; }
-  .light.green .dot { background: var(--green); } .light.green.on { border-color: var(--green); box-shadow: 0 0 24px rgba(47,163,107,.25) inset; }
-  .light.amber .dot { background: var(--amber); } .light.amber.on { border-color: var(--amber); box-shadow: 0 0 24px rgba(217,154,43,.25) inset; }
-  .light.red .dot { background: var(--red); } .light.red.on { border-color: var(--red); box-shadow: 0 0 24px rgba(217,79,65,.25) inset; }
-  .light .word { font-weight: 700; letter-spacing: 1px; font-size: 13px; }
+  .light.green .dot { background: var(--green); }
+  .light.green.on { border-color: var(--green); box-shadow: 0 0 26px rgba(56,178,123,.22) inset; }
+  .light.amber .dot { background: var(--amber); }
+  .light.amber.on { border-color: var(--amber); box-shadow: 0 0 26px rgba(224,166,61,.22) inset; }
+  .light.red .dot { background: var(--red); }
+  .light.red.on { border-color: var(--red); box-shadow: 0 0 26px rgba(224,90,75,.22) inset; }
+  .light .word { font: 600 12px var(--mono); letter-spacing: .12em; }
   .light .meaning { font-size: 11px; color: var(--muted); margin-top: 3px; }
 
-  #verdict { padding: 16px 18px; border-radius: 10px; margin-bottom: 22px; border: 1px solid var(--line); }
-  #verdict.GREEN { background: rgba(47,163,107,.12); border-color: var(--green); }
-  #verdict.AMBER { background: rgba(217,154,43,.12); border-color: var(--amber); }
-  #verdict.RED   { background: rgba(217,79,65,.12);  border-color: var(--red); }
-  #verdict .rating { font-size: 22px; font-weight: 800; letter-spacing: .5px; }
-  #verdict .guidance { color: var(--ink); margin-top: 4px; }
-  #verdict .rationale { color: var(--muted); margin-top: 8px; font-size: 13.5px; }
+  #verdict { padding: 18px 20px; border-radius: var(--r); margin-bottom: 14px;
+             border: 1px solid var(--line); box-shadow: var(--shadow); }
+  #verdict.GREEN { background: linear-gradient(180deg, rgba(56,178,123,.16), rgba(56,178,123,.05)); border-color: var(--green); }
+  #verdict.AMBER { background: linear-gradient(180deg, rgba(224,166,61,.16), rgba(224,166,61,.05)); border-color: var(--amber); }
+  #verdict.RED   { background: linear-gradient(180deg, rgba(224,90,75,.16), rgba(224,90,75,.05)); border-color: var(--red); }
+  #verdict .rating { font-size: 21px; font-weight: 700; letter-spacing: .01em; }
+  #verdict .guidance { margin-top: 5px; font-weight: 500; }
+  #verdict .rationale { color: var(--muted); margin-top: 9px; font-size: 13.5px; }
 
-  section.block { margin-bottom: 22px; }
-  section.block h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 1.4px; color: var(--muted); margin: 0 0 10px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
-  .flag { display: flex; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-left-width: 4px; border-radius: 6px; margin-bottom: 8px; background: var(--panel-2); font-size: 13.5px; }
-  .flag.critical { border-left-color: var(--red); } .flag.high { border-left-color: #e0713f; }
-  .flag.medium { border-left-color: var(--amber); } .flag.low { border-left-color: var(--blue); }
-  .flag .sev { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; padding: 2px 7px; border-radius: 4px; align-self: flex-start; margin-top: 2px; white-space: nowrap; }
-  .flag.critical .sev { background: rgba(217,79,65,.18); color: #ff8d81; }
-  .flag.high .sev { background: rgba(224,113,63,.18); color: #f4a179; }
-  .flag.medium .sev { background: rgba(217,154,43,.18); color: #eec06a; }
-  .flag.low .sev { background: rgba(76,141,196,.18); color: #8dbbe4; }
-  .flag .ev { color: var(--faint); font-size: 12.5px; margin-top: 4px; font-family: var(--mono); }
+  .ataglance { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 22px; }
+  .ataglance .chip { font: 500 12px var(--mono); color: var(--muted);
+    border: 1px solid var(--line-soft); background: var(--panel); border-radius: 99px;
+    padding: 6px 12px; }
+  .ataglance .chip b { color: var(--ink); font-weight: 600; }
 
-  .step { border: 1px solid var(--line); border-radius: 6px; margin-bottom: 8px; background: var(--panel-2); }
-  .step summary { cursor: pointer; padding: 10px 12px; display: flex; align-items: center; gap: 10px; font-size: 13.5px; list-style: none; }
+  section.block { margin-bottom: 24px; }
+  section.block h3 { font: 600 11px/1 var(--mono); letter-spacing: .14em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 10px;
+    border-bottom: 1px solid var(--line-soft); padding-bottom: 7px; }
+  section.block h3 .count { color: var(--faint); }
+  .prose { margin: 0; font-size: 14px; }
+
+  .flag { display: flex; gap: 10px; padding: 11px 13px; border: 1px solid var(--line-soft);
+          border-left-width: 4px; border-radius: 7px; margin-bottom: 8px;
+          background: var(--panel); font-size: 13.5px; }
+  .flag.critical { border-left-color: var(--red); }
+  .flag.high { border-left-color: #e0713f; }
+  .flag.medium { border-left-color: var(--amber); }
+  .flag.low { border-left-color: var(--blue); }
+  .flag .sev { font: 600 10px var(--mono); text-transform: uppercase; letter-spacing: .1em;
+               padding: 3px 7px; border-radius: 4px; align-self: flex-start; margin-top: 2px;
+               white-space: nowrap; }
+  .flag.critical .sev { background: rgba(224,90,75,.16); color: #ff9a8d; }
+  .flag.high .sev { background: rgba(224,113,63,.16); color: #f4a97f; }
+  .flag.medium .sev { background: rgba(224,166,61,.16); color: #efc471; }
+  .flag.low .sev { background: rgba(95,155,208,.16); color: #97c1e6; }
+  .flag .ev { color: var(--faint); font-size: 12px; margin-top: 5px; font-family: var(--mono); }
+
+  .step { border: 1px solid var(--line-soft); border-radius: 7px; margin-bottom: 8px;
+          background: var(--panel); }
+  .step summary { cursor: pointer; padding: 10px 13px; display: flex; align-items: center;
+                  gap: 10px; font-size: 13.5px; list-style: none; }
   .step summary::-webkit-details-marker { display: none; }
-  .step .st { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
-  .st.pass { background: rgba(47,163,107,.16); color: #7fd0a7; }
-  .st.warning { background: rgba(217,154,43,.16); color: #eec06a; }
-  .st.fail { background: rgba(217,79,65,.16); color: #ff8d81; }
-  .st.not_testable { background: rgba(93,107,118,.2); color: var(--muted); }
-  .step ul { margin: 0; padding: 0 14px 12px 32px; color: var(--muted); font-size: 13px; }
+  .step summary:hover { color: var(--ink); }
+  .st { font: 600 10px var(--mono); text-transform: uppercase; letter-spacing: .1em;
+        padding: 3px 7px; border-radius: 4px; white-space: nowrap; }
+  .st.pass { background: rgba(56,178,123,.15); color: #86d6b0; }
+  .st.warning { background: rgba(224,166,61,.15); color: #efc471; }
+  .st.fail { background: rgba(224,90,75,.15); color: #ff9a8d; }
+  .st.not_testable { background: rgba(102,117,127,.18); color: var(--muted); }
+  .step ul { margin: 0; padding: 0 16px 12px 34px; color: var(--muted); font-size: 13px; }
   .step ul li { margin-bottom: 4px; }
 
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { text-align: left; color: var(--faint); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
-  td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  td.mono { font-family: var(--mono); font-size: 12.5px; }
+  th { text-align: left; color: var(--faint); font: 600 10.5px var(--mono);
+       text-transform: uppercase; letter-spacing: .1em; padding: 6px 8px;
+       border-bottom: 1px solid var(--line); }
+  td { padding: 8px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  td.mono { font-family: var(--mono); font-size: 12px; }
   .ok { color: var(--green); } .no { color: var(--red); }
 
   .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   @media (max-width: 1180px) { .twocol { grid-template-columns: 1fr; } }
   ul.plain { margin: 0; padding-left: 18px; font-size: 13.5px; }
-  ul.plain li { margin-bottom: 5px; }
-  ul.plain .why { color: var(--faint); font-size: 12.5px; }
+  ul.plain li { margin-bottom: 6px; }
+  ul.plain .why { color: var(--faint); font-size: 12px; }
 
-  #disclaimer { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; color: var(--muted); font-size: 12.5px; background: var(--panel-2); }
-  #disclaimer h4 { margin: 0 0 6px; font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--faint); }
-  .meta { color: var(--faint); font-size: 12px; font-family: var(--mono); margin-top: 14px; }
-  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--faint); border-top-color: var(--amber); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  #disclaimer { border: 1px solid var(--line-soft); border-radius: 8px; padding: 14px 16px;
+                color: var(--muted); font-size: 12.5px; background: var(--panel); }
+  #disclaimer h4 { margin: 0 0 6px; font: 600 10.5px var(--mono); letter-spacing: .12em;
+                   text-transform: uppercase; color: var(--faint); }
+  .meta { color: var(--faint); font-size: 11.5px; font-family: var(--mono); margin-top: 14px;
+          line-height: 1.8; }
+
+  #toast { position: fixed; right: 20px; bottom: 20px; background: var(--panel-2);
+           border: 1px solid var(--line); border-radius: 8px; padding: 11px 16px;
+           font-size: 13px; color: var(--ink); box-shadow: var(--shadow); opacity: 0;
+           transform: translateY(8px); transition: opacity .2s, transform .2s;
+           pointer-events: none; max-width: 420px; z-index: 50; }
+  #toast.show { opacity: 1; transform: none; }
+  #toast.bad { border-color: var(--red); }
+
+  /* ---- print: clean paper report ---- */
+  @media print {
+    body { background: #fff; color: #111; font-size: 12px; }
+    header, aside, #toolbar, #toast, .lights, #placeholder, #loading { display: none !important; }
+    main { display: block; padding: 0; }
+    .card, .flag, .step, #disclaimer, .ataglance .chip { background: #fff; border-color: #bbb; }
+    #verdict { background: #fff; border: 2px solid #444; box-shadow: none; }
+    #verdict .rationale, .flag .ev, .step ul, ul.plain .why, .meta, #disclaimer,
+    section.block h3, td, th { color: #333; }
+    .prose, .flag, .step summary { color: #111; }
+    a { color: #111; }
+  }
 </style>
 </head>
 <body>
 <header>
-  <h1>BFL GROUP <span class="tag">/ ELITE COMPLIANCE &amp; AUDIT AGENT</span></h1>
-  <p>Authenticity · sourcing legitimacy · chain of title — independent verification for the Buying Team</p>
+  <div class="mark">B</div>
+  <div>
+    <h1>BFL Compliance &amp; Audit Agent</h1>
+    <div class="sub">Authenticity · sourcing legitimacy · chain of title</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="pill">advisory to the Buying Team</div>
 </header>
 
 <main>
-  <div>
-    <div class="panel">
-      <h2>1 · Case Submission</h2>
-      <label for="case_reference">Case reference</label>
-      <input type="text" id="case_reference" placeholder="e.g. BFL-2026-0042">
-      <label for="vendor_name">Vendor (seller to BFL)</label>
-      <input type="text" id="vendor_name" placeholder="Legal name on the invoice">
-      <label for="brand">Brand under review</label>
-      <input type="text" id="brand" placeholder="e.g. brand of the goods">
-      <label for="product_category">Product category</label>
-      <input type="text" id="product_category" placeholder="e.g. apparel, watches, footwear">
-      <label for="notes">Buyer notes for the auditor</label>
-      <textarea id="notes" placeholder="Anything the agent should know (deal background, prior concerns…)"></textarea>
+  <aside>
+    <div class="card">
+      <h2><span class="n">01</span> Documents</h2>
 
-      <div id="dropzone">
-        <strong>Drop documents here</strong> or click to browse<br>
-        <span class="hint">Invoices, chain-of-title invoices, packing lists, airway bills, Excel extracts, product photos.<br>PDF · XLSX · CSV · PNG · JPG · WebP · GIF — multiple files at once.</span>
+      <div id="dropzone" role="button" tabindex="0" aria-label="Upload documents">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/>
+        </svg>
+        <div class="cta">Drop the deal's documents — or <u>browse</u></div>
+        <div class="hint">
+          Invoices, chain-of-title invoices, packing lists, airway bills, Excel extracts, photos.<br>
+          <span class="fmt">PDF · XLSX · CSV · PNG · JPG · WEBP · GIF</span> — several at once.
+        </div>
         <input type="file" id="fileinput" multiple hidden
                accept=".pdf,.xlsx,.xlsm,.csv,.txt,.png,.jpg,.jpeg,.gif,.webp">
       </div>
+
+      <div id="filebar">
+        <span id="filestats"></span>
+        <button type="button" id="clearall">clear all</button>
+      </div>
       <ul id="filelist"></ul>
 
+      <div class="fields">
+        <h2>02 &nbsp;Case details <span class="opt">— optional, helps the agent</span></h2>
+        <div class="grid2">
+          <div>
+            <label for="case_reference">Case reference</label>
+            <input type="text" id="case_reference" placeholder="auto if empty" autocomplete="off">
+          </div>
+          <div>
+            <label for="product_category">Category</label>
+            <input type="text" id="product_category" placeholder="apparel, watches…" autocomplete="off">
+          </div>
+        </div>
+        <label for="vendor_name">Vendor (seller to BFL)</label>
+        <input type="text" id="vendor_name" placeholder="Legal name on the invoice" autocomplete="off">
+        <label for="brand">Brand under review</label>
+        <input type="text" id="brand" placeholder="Brand of the goods" autocomplete="off">
+        <label for="notes">Notes for the auditor</label>
+        <textarea id="notes" placeholder="Deal background, prior concerns…"></textarea>
+      </div>
+
       <button id="runbtn" disabled>Run Compliance Audit</button>
-      <div id="status"></div>
+      <div id="status" role="status" aria-live="polite"></div>
     </div>
 
-    <div class="panel checklist">
-      <h2>Standard document requirements</h2>
-      <ol id="checklist"></ol>
+    <div class="card">
+      <details class="ref">
+        <summary>
+          <h2 style="margin:0;">Standard document checklist</h2>
+          <span class="chev">▶</span>
+        </summary>
+        <ol id="checklist"></ol>
+      </details>
     </div>
-  </div>
+  </aside>
 
-  <div>
-    <div id="placeholder" class="">
-      <p><strong>No audit yet.</strong></p>
-      <p>Submit the case documents on the left. The agent reads every page — including scans and photos — runs the 7-step validation protocol, and returns a Green / Amber / Red signal with every red flag it finds.</p>
+  <div id="main-col">
+    <div id="placeholder">
+      <h2>Every deal, audited before you commit.</h2>
+      <p>The agent reads every page you drop in — scans, photos, spreadsheets — runs the
+         7-step validation protocol, and answers with a single signal.</p>
+      <div class="howto">
+        <div class="stepcard">
+          <div class="stepno">STEP 1</div>
+          <h3>Drop the documents</h3>
+          <p>Everything the vendor gave you: invoices, transport docs, extracts, photos.</p>
+        </div>
+        <div class="stepcard">
+          <div class="stepno">STEP 2</div>
+          <h3>The agent audits</h3>
+          <p>Sanitization integrity, vendor checks, chain of title, SKU &amp; quantity flow, brand authorization.</p>
+        </div>
+        <div class="stepcard">
+          <div class="stepno">STEP 3</div>
+          <h3>Read the signal</h3>
+          <p><b style="color:var(--green)">Green</b> proceed ·
+             <b style="color:var(--amber)">Amber</b> discuss &amp; decide ·
+             <b style="color:var(--red)">Red</b> stop.</p>
+        </div>
+      </div>
     </div>
+
+    <div id="loading">
+      <div class="orbit" aria-hidden="true"></div>
+      <h2>Audit in progress <span class="elapsed" id="elapsed">0:00</span></h2>
+      <div class="hintline" id="hintline">Reading every page of every document…</div>
+      <div class="shimmer" aria-hidden="true"></div>
+    </div>
+
     <div id="report" hidden></div>
   </div>
 </main>
+
+<div id="toast" role="status"></div>
 
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmtSize = (n) => n >= 1048576 ? (n/1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n/1024)) + " KB";
+const EXT_OK = new Set(["pdf","xlsx","xlsm","csv","txt","png","jpg","jpeg","gif","webp"]);
+const EXT_LABEL = { pdf:"PDF", xlsx:"XLS", xlsm:"XLS", csv:"CSV", txt:"TXT",
+                    png:"IMG", jpg:"IMG", jpeg:"IMG", gif:"IMG", webp:"IMG" };
+const MAX_FILES = 15, MAX_TOTAL = 22 * 1048576;
 
 let files = [];
+let lastReport = null;
+let timerId = null, hintId = null, t0 = 0;
 
+/* ---- toast ---- */
+let toastId = null;
+function toast(msg, bad = false) {
+  const el = $("toast");
+  el.textContent = msg;
+  el.className = "show" + (bad ? " bad" : "");
+  clearTimeout(toastId);
+  toastId = setTimeout(() => { el.className = ""; }, 3800);
+}
+
+/* ---- checklist ---- */
 fetch("/api/v1/checklist").then(r => r.json()).then(items => {
-  $("checklist").innerHTML = items.map(i => `<li><strong>${esc(i.name)}</strong></li>`).join("");
+  $("checklist").innerHTML = items.map(i =>
+    `<li><strong>${esc(i.name)}</strong><small>${esc(i.why_needed)}</small></li>`).join("");
 }).catch(() => {});
 
+/* ---- upload ---- */
 const dz = $("dropzone"), input = $("fileinput");
 dz.addEventListener("click", () => input.click());
+dz.addEventListener("keydown", e => {
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); }
+});
 dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("drag"); });
 dz.addEventListener("dragleave", () => dz.classList.remove("drag"));
 dz.addEventListener("drop", e => {
@@ -180,33 +447,90 @@ dz.addEventListener("drop", e => {
   addFiles([...e.dataTransfer.files]);
 });
 input.addEventListener("change", () => { addFiles([...input.files]); input.value = ""; });
+$("clearall").addEventListener("click", () => { files = []; renderFiles(); });
 
 function addFiles(picked) {
+  const rejected = [];
   for (const f of picked) {
+    const ext = (f.name.split(".").pop() || "").toLowerCase();
+    if (!EXT_OK.has(ext)) { rejected.push(f.name); continue; }
     if (!files.some(x => x.name === f.name && x.size === f.size)) files.push(f);
+  }
+  if (files.length > MAX_FILES) {
+    files = files.slice(0, MAX_FILES);
+    toast(`Limit is ${MAX_FILES} files per audit — extra files were dropped.`, true);
+  }
+  if (rejected.length) {
+    toast(`Not supported: ${rejected.join(", ")}. Use PDF, Excel, CSV or images` +
+          ` (re-save legacy .xls as .xlsx).`, true);
   }
   renderFiles();
 }
-function removeFile(i) { files.splice(i, 1); renderFiles(); }
 function renderFiles() {
-  $("filelist").innerHTML = files.map((f, i) =>
-    `<li><span class="name">${esc(f.name)}</span><span class="size">${fmtSize(f.size)}</span>` +
-    `<button title="Remove" data-i="${i}">✕</button></li>`).join("");
-  $("filelist").querySelectorAll("button").forEach(b =>
-    b.addEventListener("click", () => removeFile(Number(b.dataset.i))));
+  const list = $("filelist");
+  list.innerHTML = files.map((f, i) => {
+    const ext = (f.name.split(".").pop() || "").toLowerCase();
+    return `<li><span class="ftype">${EXT_LABEL[ext] || "DOC"}</span>` +
+      `<span class="name" title="${esc(f.name)}">${esc(f.name)}</span>` +
+      `<span class="size">${fmtSize(f.size)}</span>` +
+      `<button class="rm" title="Remove" aria-label="Remove ${esc(f.name)}" data-i="${i}">✕</button></li>`;
+  }).join("");
+  list.querySelectorAll(".rm").forEach(b =>
+    b.addEventListener("click", () => { files.splice(Number(b.dataset.i), 1); renderFiles(); }));
+  const total = files.reduce((a, f) => a + f.size, 0);
+  $("filebar").style.display = files.length ? "flex" : "none";
+  $("filestats").textContent =
+    `${files.length} file${files.length === 1 ? "" : "s"} · ${fmtSize(total)} of ${fmtSize(MAX_TOTAL)}`;
+  if (total > MAX_TOTAL) toast("Upload exceeds the per-audit size limit — remove some files.", true);
   $("runbtn").disabled = files.length === 0;
+}
+
+/* ---- run ---- */
+const HINTS = [
+  "Reading every page of every document…",
+  "Checking sanitization integrity against the strict-rejection list…",
+  "Cross-checking invoice numbers, parties and tax registrations…",
+  "Mapping the chain of title back to the brand…",
+  "Testing quantity flow for inflation and mid-chain SKUs…",
+  "Checking timing plausibility across the chain…",
+  "Reviewing brand authorization and category coverage…",
+  "Compiling the red-flag report…",
+];
+function startLoading() {
+  $("placeholder").style.display = "none";
+  $("report").hidden = true;
+  $("loading").style.display = "block";
+  t0 = Date.now();
+  let h = 0;
+  $("hintline").textContent = HINTS[0];
+  $("elapsed").textContent = "0:00";
+  timerId = setInterval(() => {
+    const s = Math.floor((Date.now() - t0) / 1000);
+    $("elapsed").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  }, 1000);
+  hintId = setInterval(() => {
+    h = (h + 1) % HINTS.length;
+    $("hintline").textContent = HINTS[h];
+  }, 7000);
+}
+function stopLoading() {
+  clearInterval(timerId); clearInterval(hintId);
+  $("loading").style.display = "none";
 }
 
 $("runbtn").addEventListener("click", async () => {
   const btn = $("runbtn"), status = $("status");
   btn.disabled = true;
   status.className = "";
-  status.innerHTML = `<span class="spinner"></span>Deep audit in progress — the agent is reading every page and testing the chain. This can take a few minutes.`;
+  status.textContent = "Audit in progress — this can take a few minutes for large cases.";
+  startLoading();
 
   const fd = new FormData();
   for (const f of files) fd.append("files", f, f.name);
-  for (const k of ["case_reference", "vendor_name", "brand", "product_category", "notes"])
-    fd.append(k, $(k).value);
+  const caseRef = $("case_reference").value.trim() ||
+    `BFL-${new Date().toISOString().slice(0, 10)}-${String(Date.now() % 1000).padStart(3, "0")}`;
+  fd.append("case_reference", caseRef);
+  for (const k of ["vendor_name", "brand", "product_category", "notes"]) fd.append(k, $(k).value);
 
   try {
     const res = await fetch("/api/v1/audits", { method: "POST", body: fd });
@@ -215,15 +539,52 @@ $("runbtn").addEventListener("click", async () => {
       const msg = typeof body.detail === "string" ? body.detail : "The audit request was rejected.";
       throw new Error(msg);
     }
-    renderReport(body);
+    stopLoading();
     status.textContent = "";
+    renderReport(body);
   } catch (err) {
+    stopLoading();
+    $(lastReport ? "report" : "placeholder").hidden = false;
+    if (!lastReport) $("placeholder").style.display = "block";
     status.className = "err";
     status.textContent = err.message || "The audit failed. Check the service logs.";
+    toast(err.message || "The audit failed.", true);
   } finally {
     btn.disabled = files.length === 0;
   }
 });
+
+/* ---- report actions ---- */
+function resetForNewAudit() {
+  files = []; renderFiles();
+  lastReport = null;
+  $("report").hidden = true;
+  $("placeholder").style.display = "block";
+  $("status").textContent = "";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function downloadJson() {
+  if (!lastReport) return;
+  const blob = new Blob([JSON.stringify(lastReport, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `bfl-audit-${(lastReport.case_reference || "report").replace(/[^\w.-]+/g, "_")}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function copySummary() {
+  if (!lastReport) return;
+  const r = lastReport;
+  const flags = r.red_flags.map(f => `• [${f.severity}] ${f.category}: ${f.description}`).join("\n");
+  const text = `BFL Compliance Audit — ${r.case_reference || "no ref"}\n` +
+    `Vendor: ${r.vendor_name || "—"} · Brand: ${r.brand || "—"}\n` +
+    `${r.risk_rating} RISK — ${r.signal}. ${r.signal_guidance}\n\n` +
+    `${r.risk_rationale}\n\nRed flags (${r.red_flags.length}):\n${flags || "none"}\n\n` +
+    `Missing documents: ${r.documents_missing.map(d => d.name).join("; ") || "none"}`;
+  navigator.clipboard.writeText(text).then(
+    () => toast("Summary copied — ready to paste to the buying team."),
+    () => toast("Could not copy to clipboard.", true));
+}
 
 function light(color, word, meaning, on) {
   return `<div class="light ${color} ${on ? "on" : ""}"><div class="dot"></div>` +
@@ -231,7 +592,8 @@ function light(color, word, meaning, on) {
 }
 
 function renderReport(r) {
-  $("placeholder").hidden = true;
+  lastReport = r;
+  $("placeholder").style.display = "none";
   const el = $("report");
   el.hidden = false;
 
@@ -239,8 +601,17 @@ function renderReport(r) {
     const order = { critical: 0, high: 1, medium: 2, low: 3 };
     return order[a.severity] - order[b.severity];
   });
+  const failSteps = r.steps.filter(s => s.status === "fail" || s.status === "warning").length;
 
   el.innerHTML = `
+    <div id="toolbar">
+      <button type="button" id="btn-new">← New audit</button>
+      <span style="flex:1"></span>
+      <button type="button" id="btn-copy">Copy summary</button>
+      <button type="button" id="btn-json">Download JSON</button>
+      <button type="button" id="btn-print" class="primaryish">Print / PDF</button>
+    </div>
+
     <div class="lights">
       ${light("green", "GREEN", "Proceed", r.signal === "GREEN")}
       ${light("amber", "AMBER", "Discuss collectively & take a call", r.signal === "AMBER")}
@@ -253,13 +624,20 @@ function renderReport(r) {
       <div class="rationale" data-testid="rationale">${esc(r.risk_rationale)}</div>
     </div>
 
+    <div class="ataglance">
+      <span class="chip"><b>${flags.length}</b> red flag${flags.length === 1 ? "" : "s"}</span>
+      <span class="chip"><b>${failSteps}</b> step${failSteps === 1 ? "" : "s"} need attention</span>
+      <span class="chip"><b>${r.documents_missing.length}</b> document${r.documents_missing.length === 1 ? "" : "s"} not received</span>
+      <span class="chip"><b>${r.documents_analyzed.length}</b> analyzed</span>
+    </div>
+
     <section class="block" data-testid="executive-summary">
       <h3>Executive summary</h3>
-      <p style="margin:0; font-size:14px;">${esc(r.executive_summary)}</p>
+      <p class="prose">${esc(r.executive_summary)}</p>
     </section>
 
     <section class="block" data-testid="red-flags">
-      <h3>Red flags (${flags.length})</h3>
+      <h3>Red flags <span class="count">(${flags.length})</span></h3>
       ${flags.length === 0 ? '<p style="color:var(--muted); font-size:13.5px; margin:0;">No red flags reported.</p>' : flags.map(f => `
         <div class="flag ${esc(f.severity)}" data-testid="red-flag" data-severity="${esc(f.severity)}">
           <span class="sev">${esc(f.severity)}</span>
@@ -272,7 +650,7 @@ function renderReport(r) {
 
     <section class="block" data-testid="sanitization">
       <h3>Sanitization integrity</h3>
-      <div class="step"><summary style="display:flex; padding:10px 12px; gap:10px; align-items:center;">
+      <div class="step"><summary style="display:flex; padding:10px 13px; gap:10px; align-items:center;">
         <span class="st ${esc(r.sanitization_check.status)}" data-testid="sanitization-status">${esc(r.sanitization_check.status.replace("_", " "))}</span>
         <span style="font-size:13.5px;">Redaction check against the permitted / strictly-rejected lists</span>
       </summary>
@@ -307,7 +685,7 @@ function renderReport(r) {
           `<ul class="plain">${r.documents_received.map(d => `<li>${esc(d)}</li>`).join("")}</ul>`}
       </section>
       <section class="block" data-testid="docs-missing">
-        <h3>Requested but not received (${r.documents_missing.length})</h3>
+        <h3>Requested but not received <span class="count">(${r.documents_missing.length})</span></h3>
         ${r.documents_missing.length === 0 ? '<p style="color:var(--muted); font-size:13.5px; margin:0;">Standard document set is complete.</p>' :
           `<ul class="plain">${r.documents_missing.map(d =>
             `<li><strong>${esc(d.name)}</strong><div class="why">${esc(d.why_needed)}</div></li>`).join("")}</ul>`}
@@ -334,6 +712,10 @@ function renderReport(r) {
       <span data-testid="disclaimer-text">${esc(r.disclaimer)}</span>
     </div>`;
 
+  $("btn-new").addEventListener("click", resetForNewAudit);
+  $("btn-json").addEventListener("click", downloadJson);
+  $("btn-copy").addEventListener("click", copySummary);
+  $("btn-print").addEventListener("click", () => window.print());
   el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 </script>
