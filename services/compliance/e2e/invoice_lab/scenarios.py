@@ -184,29 +184,87 @@ def _invoice_pdf(
     return text_pdf(lines)
 
 
+def _cartons(item: LineItem) -> int:
+    return max(1, item.qty // 50) if isinstance(item.qty, int) else 0
+
+
 def _packing_csv(items: list[LineItem], shipment_ref: str) -> bytes:
     rows = ["sku,ean,description,cartons,units,shipment_ref"]
     for it in items:
-        units = it.qty if isinstance(it.qty, int) else 0
-        cartons = max(1, units // 50) if isinstance(it.qty, int) else 0
         rows.append(
-            f"{it.sku},{it.ean},{it.description},{cartons},{_qty(it.qty)},{shipment_ref}"
+            f"{it.sku},{it.ean},{it.description},{_cartons(it)},{_qty(it.qty)},{shipment_ref}"
         )
     return ("\n".join(rows) + "\n").encode()
 
 
+_CHAIN_XLSX_HEADER = ["link", "seller", "buyer", "invoice_no", "date", "sku", "qty"]
+
+
+def _chain_summary_facts(rows: list[list[Any]]) -> dict[str, Any]:
+    """Record the spreadsheet's contents exactly: the header plus these rows
+    and nothing else. Ground truth must never claim more than is printed."""
+    return {
+        "header_row": _CHAIN_XLSX_HEADER,
+        "rows": rows,
+        "note": (
+            "These rows are the complete contents of the spreadsheet. Any chain "
+            "link or SKU not present in 'rows' is genuinely absent from this "
+            "file, and the agent may correctly report that omission."
+        ),
+    }
+
+
+def _packing_facts(items: list[LineItem], shipment_ref: str) -> dict[str, Any]:
+    return {
+        "shipment_ref": shipment_ref,
+        "line_items": [{**it.facts(), "cartons": _cartons(it)} for it in items],
+    }
+
+
 def _chain_xlsx(chain_rows: list[list[Any]]) -> bytes:
+    import zipfile
+    from datetime import datetime
+
     from openpyxl import Workbook
 
     workbook = Workbook()
+    # openpyxl stamps created/modified with "now", and zip entries carry the
+    # wall clock too — pin both so the same fixture is byte-identical forever.
+    frozen = datetime(2026, 1, 1)
+    workbook.properties.created = frozen
+    workbook.properties.modified = frozen
     sheet = workbook.active
     sheet.title = "ChainSummary"
-    sheet.append(["link", "seller", "buyer", "invoice_no", "date", "sku", "qty"])
+    sheet.append(list(_CHAIN_XLSX_HEADER))
     for row in chain_rows:
         sheet.append(row)
     buffer = io.BytesIO()
     workbook.save(buffer)
-    return buffer.getvalue()
+
+    source = zipfile.ZipFile(io.BytesIO(buffer.getvalue()))
+    repacked = io.BytesIO()
+    with zipfile.ZipFile(repacked, "w", zipfile.ZIP_DEFLATED) as out:
+        for name in source.namelist():
+            data = source.read(name)
+            if name == "docProps/core.xml":
+                # openpyxl stamps dcterms:modified with save-time "now",
+                # ignoring workbook.properties — normalize it too.
+                import re
+
+                data = re.sub(
+                    rb"<dcterms:modified[^>]*>[^<]*</dcterms:modified>",
+                    b'<dcterms:modified xsi:type="dcterms:W3CDTF">'
+                    b"2026-01-01T00:00:00Z</dcterms:modified>",
+                    data,
+                )
+            info = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o600 << 16
+            out.writestr(info, data)
+    return repacked.getvalue()
+
+
+_WAREHOUSE = "BFL DIP Warehouse 4"
 
 
 def _delivery_note_csv(vendor: str, date: str, items: list[LineItem], awb: str) -> bytes:
@@ -214,9 +272,22 @@ def _delivery_note_csv(vendor: str, date: str, items: list[LineItem], awb: str) 
         "document,warehouse,received_date,awb,sku,units_received",
     ]
     for it in items:
-        rows.append(f"GRN,BFL DIP Warehouse 4,{date},{awb},{it.sku},{_qty(it.qty)}")
+        rows.append(f"GRN,{_WAREHOUSE},{date},{awb},{it.sku},{_qty(it.qty)}")
     rows.append(f"# Goods received in full from {vendor}")
     return ("\n".join(rows) + "\n").encode()
+
+
+def _delivery_note_facts(
+    vendor: str, date: str, items: list[LineItem], awb: str
+) -> dict[str, Any]:
+    return {
+        "document": "GRN (goods received note)",
+        "warehouse": _WAREHOUSE,
+        "received_date": date,
+        "awb": awb,
+        "line_items": [{"sku": it.sku, "units_received": it.qty} for it in items],
+        "printed_note": f"Goods received in full from {vendor}",
+    }
 
 
 def _auth_letter_pdf(brand: str, distributor: str, category: str, year: str) -> bytes:
@@ -237,6 +308,30 @@ def _auth_letter_pdf(brand: str, distributor: str, category: str, year: str) -> 
             f"{brand}",
         ]
     )
+
+
+def _auth_letter_facts(brand: str, distributor: str, category: str, year: str) -> dict[str, Any]:
+    return {
+        "authorized_category": category,
+        "authorized_entity": distributor,
+        "issued_by": f"{brand} — Brand Protection Office",
+        "valid_year": year,
+        "printed_text": (
+            f"{brand.upper()} — BRAND AUTHORIZATION LETTER / To whom it may "
+            f"concern, / {brand} confirms that {distributor} is an authorized "
+            f"wholesale distributor of {brand} products for the product "
+            f"category: {category.upper()} ONLY. / This authorization covers "
+            f"onward wholesale resale of {category} and is valid for the "
+            f"calendar year {year}. / Brand Protection Office / {brand}"
+        ),
+        "presentation": (
+            "Plain typed monospaced text. The closing is only the typed words "
+            "'Brand Protection Office' above the brand name — the letter carries "
+            "NO letterhead graphic, logo, reference number, contact details, "
+            "stamp, or handwritten/ink signature. Agent observations to that "
+            "effect are accurate descriptions of the document, not fabrications."
+        ),
+    }
 
 
 # --- chain assembly ---------------------------------------------------------
@@ -320,7 +415,11 @@ def _chain_invoices(
     inv1_no = f"BR-{rng.randint(10000, 99999)}"
     inv2_no = f"DS-{rng.randint(10000, 99999)}"
     inv3_no = f"VN-{rng.randint(10000, 99999)}"
-    awb = f"AWB 176-{rng.randint(1000000, 9999999)}"
+    # Each leg of the chain moves under its own transport document — reusing
+    # one AWB across legs is itself a chain inconsistency, so clean fixtures
+    # must not accidentally contain it.
+    awb2 = f"AWB 176-{rng.randint(1000000, 9999999)}"
+    awb3 = f"AWB 176-{rng.randint(1000000, 9999999)}"
 
     def doc(
         filename: str,
@@ -335,6 +434,10 @@ def _chain_invoices(
         grand: float | str | None = None,
     ) -> GeneratedDoc:
         total = _grand(items) if grand is None else grand
+        # Everything printed on the page must be recorded in content_facts —
+        # the Senior Auditor treats it as the exhaustive record when screening
+        # the agent for hallucinated identifiers.
+        trn = f"TRN {rng.randint(10**11, 10**12 - 1)}"
         return GeneratedDoc(
             filename=filename,
             data=_invoice_pdf(
@@ -343,7 +446,7 @@ def _chain_invoices(
                 date=date,
                 seller=seller[0],
                 seller_addr=seller[1],
-                seller_trn=f"TRN {rng.randint(10**11, 10**12 - 1)}",
+                seller_trn=trn,
                 buyer=buyer,
                 items=items,
                 currency=chain.currency,
@@ -357,8 +460,12 @@ def _chain_invoices(
                 "invoice_no": no,
                 "date": date,
                 "seller": seller[0],
+                "seller_address": seller[1],
+                "seller_tax_reg": trn,
                 "buyer": buyer,
                 "currency": chain.currency,
+                "payment_terms": "30 days net",
+                "incoterms": "FOB",
                 "line_items": [it.facts() for it in items],
                 "grand_total": total,
                 "origin": origin,
@@ -387,7 +494,7 @@ def _chain_invoices(
             f"{chain.vendor[0]}, {chain.vendor[1]}",
             items2,
             chain.brand[2],
-            awb,
+            awb2,
         ),
         doc(
             "03_bfl_invoice.pdf",
@@ -398,7 +505,7 @@ def _chain_invoices(
             BFL_BUYER,
             items3,
             chain.brand[2],
-            awb,
+            awb3,
             grand=grand3,
         ),
     ]
@@ -434,7 +541,7 @@ def build_clean(rng: Rng, fixture_id: str, variant: int) -> Fixture:
             _packing_csv(items3, awb),
             "packing_list",
             "Packing list for the BFL shipment (matches BFL invoice items).",
-            {"line_items": [it.facts() for it in items3]},
+            _packing_facts(items3, awb),
         )
     )
     docs.append(
@@ -443,7 +550,7 @@ def build_clean(rng: Rng, fixture_id: str, variant: int) -> Fixture:
             _delivery_note_csv(chain.vendor[0], chain.d3, items3, awb),
             "warehouse_receiving_record",
             "BFL warehouse goods-received note confirming physical receipt.",
-            {},
+            _delivery_note_facts(chain.vendor[0], chain.d3, items3, awb),
         )
     )
     docs.append(
@@ -452,29 +559,30 @@ def build_clean(rng: Rng, fixture_id: str, variant: int) -> Fixture:
             _auth_letter_pdf(chain.brand[0], chain.distributor[0], "apparel", "2026"),
             "brand_authorization",
             f"Brand letter authorizing {chain.distributor[0]} for APPAREL wholesale.",
-            {"authorized_category": "apparel", "authorized_entity": chain.distributor[0]},
+            _auth_letter_facts(chain.brand[0], chain.distributor[0], "apparel", "2026"),
         )
+    )
+    summary_rows: list[list[Any]] = (
+        [
+            [1, chain.brand[0], chain.distributor[0], "see inv 01", chain.d1, s[0], q]
+            for s, q in zip(chain.skus, q1, strict=True)
+        ]
+        + [
+            [2, chain.distributor[0], chain.vendor[0], "see inv 02", chain.d2, s[0], q]
+            for s, q in zip(chain.skus, q2, strict=True)
+        ]
+        + [
+            [3, chain.vendor[0], "BFL Group", "see inv 03", chain.d3, s[0], q]
+            for s, q in zip(chain.skus, q3, strict=True)
+        ]
     )
     docs.append(
         GeneratedDoc(
             "07_chain_summary.xlsx",
-            _chain_xlsx(
-                [
-                    [1, chain.brand[0], chain.distributor[0], "see inv 01", chain.d1, s[0], q]
-                    for s, q in zip(chain.skus, q1, strict=True)
-                ]
-                + [
-                    [2, chain.distributor[0], chain.vendor[0], "see inv 02", chain.d2, s[0], q]
-                    for s, q in zip(chain.skus, q2, strict=True)
-                ]
-                + [
-                    [3, chain.vendor[0], "BFL Group", "see inv 03", chain.d3, s[0], q]
-                    for s, q in zip(chain.skus, q3, strict=True)
-                ]
-            ),
+            _chain_xlsx(summary_rows),
             "chain_summary",
             "Vendor-prepared Excel summary of the full chain (consistent).",
-            {},
+            _chain_summary_facts(summary_rows),
         )
     )
     return Fixture(
@@ -524,7 +632,7 @@ def build_mid_chain_sku(rng: Rng, fixture_id: str, variant: int) -> Fixture:
             _packing_csv(items3, awb),
             "packing_list",
             "Packing list for the BFL shipment.",
-            {"line_items": [it.facts() for it in items3]},
+            _packing_facts(items3, awb),
         )
     )
     return Fixture(
@@ -568,22 +676,22 @@ def build_quantity_inflation(rng: Rng, fixture_id: str, variant: int) -> Fixture
     items2 = _items(chain.skus, q3, [round(u * 1.2, 2) for u in u1])
     items3 = _items(chain.skus, q3, [round(u * 1.45, 2) for u in u1])
     docs = _chain_invoices(chain, rng, items1, items2, items3)
+    # Deliberately lists only links 1 and 3 — the spreadsheet skips the middle
+    # leg, and the ground truth must say so rather than claim full coverage.
+    summary_rows: list[list[Any]] = [
+        [1, chain.brand[0], chain.distributor[0], "see inv 01", chain.d1, s[0], q]
+        for s, q in zip(chain.skus, q1, strict=True)
+    ] + [
+        [3, chain.vendor[0], "BFL Group", "see inv 03", chain.d3, s[0], q]
+        for s, q in zip(chain.skus, q3, strict=True)
+    ]
     docs.append(
         GeneratedDoc(
             "04_chain_summary.xlsx",
-            _chain_xlsx(
-                [
-                    [1, chain.brand[0], chain.distributor[0], "see inv 01", chain.d1, s[0], q]
-                    for s, q in zip(chain.skus, q1, strict=True)
-                ]
-                + [
-                    [3, chain.vendor[0], "BFL Group", "see inv 03", chain.d3, s[0], q]
-                    for s, q in zip(chain.skus, q3, strict=True)
-                ]
-            ),
+            _chain_xlsx(summary_rows),
             "chain_summary",
             "Vendor-prepared Excel chain summary (contains the inflated quantity).",
-            {},
+            _chain_summary_facts(summary_rows),
         )
     )
     sku = chain.skus[inflated_idx][0]
@@ -649,8 +757,16 @@ def build_masked_anchor_qty(rng: Rng, fixture_id: str, variant: int) -> Fixture:
             "invoice_no": docs[0].content_facts["invoice_no"],
             "date": chain.d1,
             "seller": chain.brand[0],
+            "seller_address": chain.brand[1],
+            "seller_tax_reg": "TRN [REDACTED]",
+            "buyer": f"{chain.distributor[0]}, {chain.distributor[1]}",
+            "currency": chain.currency,
+            "payment_terms": "30 days net",
+            "incoterms": "FOB",
             "line_items": [it.facts() for it in masked1],
             "grand_total": "[REDACTED]",
+            "origin": chain.brand[2],
+            "shipment_ref": "[REDACTED]",
             "note": "anchor quantities masked by the vendor's sanitization",
         },
     )
@@ -742,7 +858,7 @@ def build_generic_description(rng: Rng, fixture_id: str, variant: int) -> Fixtur
             _packing_csv(packing_items, awb),
             "packing_list",
             "Packing list describing the goods only as 'mixed garments assorted'.",
-            {"line_items": [it.facts() for it in packing_items]},
+            _packing_facts(packing_items, awb),
         )
     )
     return Fixture(
@@ -823,7 +939,7 @@ def build_category_mismatch(rng: Rng, fixture_id: str, variant: int) -> Fixture:
             _auth_letter_pdf(chain.brand[0], chain.distributor[0], "watches", "2026"),
             "brand_authorization",
             f"Brand letter authorizing {chain.distributor[0]} for WATCHES only.",
-            {"authorized_category": "watches", "authorized_entity": chain.distributor[0]},
+            _auth_letter_facts(chain.brand[0], chain.distributor[0], "watches", "2026"),
         )
     )
     return Fixture(
@@ -887,10 +1003,21 @@ def build_retailer_source(rng: Rng, fixture_id: str, variant: int) -> Fixture:
         f"Retail till receipt: {retail_store} bulk sale to {chain.wholesaler[0]}.",
         {
             "seller": retail_store,
-            "buyer": chain.wholesaler[0],
+            "buyer": f"{chain.wholesaler[0]} (walk-in bulk purchase)",
             "date": chain.d1,
+            "register": "Register 04, Cashier 112",
+            "currency": chain.currency,
+            "payment_method": "TOTAL PAID (CARD)",
             "line_items": [it.facts() for it in receipt_items],
             "grand_total": _grand(receipt_items),
+            "printed_footer": (
+                "Thank you for shopping with us. "
+                "No commercial resale warranty given."
+            ),
+            "note": (
+                "Till receipt only — no seller tax registration, address, or "
+                "shipment reference is stated on the document."
+            ),
         },
     )
     docs = _chain_invoices(chain, rng, receipt_items, items2, items3)
@@ -947,19 +1074,19 @@ def build_value_mismatch(rng: Rng, fixture_id: str, variant: int) -> Fixture:
         sum(float(it.line_total) for it in items3), 2
     )  # grand total matches the WRONG line, hiding the error one level up
     docs = _chain_invoices(chain, rng, items1, items2, items3, grand3=stated_grand)
+    # Covers only the final (BFL) leg — links 1 and 2 are absent by design.
+    summary_rows: list[list[Any]] = [
+        [3, chain.vendor[0], "BFL Group", "see inv 03", chain.d3, it.sku, int(it.qty)]
+        for it in items3
+        if isinstance(it.qty, int)
+    ]
     docs.append(
         GeneratedDoc(
             "04_chain_summary.xlsx",
-            _chain_xlsx(
-                [
-                    [3, chain.vendor[0], "BFL Group", "see inv 03", chain.d3, it.sku, int(it.qty)]
-                    for it in items3
-                    if isinstance(it.qty, int)
-                ]
-            ),
+            _chain_xlsx(summary_rows),
             "chain_summary",
             "Vendor Excel summary of the BFL shipment.",
-            {},
+            _chain_summary_facts(summary_rows),
         )
     )
     correct_total = round(
