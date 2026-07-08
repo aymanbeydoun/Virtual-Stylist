@@ -50,13 +50,11 @@ against.
 ## Running locally
 
 ```bash
-# 1. Start the app (real agent for the intelligence run)
-cd services/compliance
+# 1. Start the app from the service root (real agent for the intelligence run)
 COMPLIANCE_AUDIT_BACKEND=anthropic COMPLIANCE_ANTHROPIC_API_KEY=sk-... \
   uv run uvicorn app.main:app --port 8100
 
-# 2. Run the pipeline
-cd e2e
+# 2. Run the pipeline (from this e2e/ directory)
 uv sync
 uv run playwright install chromium
 

@@ -1,0 +1,113 @@
+# Intelligence pipeline for the BFL Compliance Agent.
+#
+# Runs on every pushed commit (any branch) + on demand:
+#   1. e2e-plumbing      — deterministic UI-loop check (stub backend, fake
+#                          auditor, no secrets). Proves upload -> audit ->
+#                          scrape -> verdict -> build-blocking all work.
+#   2. intelligence-e2e  — the full library of 50+ dummy sanitized invoices
+#                          through the REAL agent, graded by the Senior
+#                          Auditor AI. Any FAIL verdict fails this job.
+#
+# Setup: add the ANTHROPIC_API_KEY repository secret (Settings -> Secrets
+# and variables -> Actions). To make these gates block merges/deploys, add
+# both job names as required status checks in branch protection.
+#
+# Cost/runtime knobs (see e2e/README.md):
+#   E2E_FIXTURE_LIMIT  0 = full library; N = round-robin subset of N cases
+#   E2E_WORKERS        parallel browser+audit workers (rate-limit sensitive)
+name: Intelligence
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      fixture_limit:
+        description: "Fixture limit (0 = full 50+ library)"
+        default: "0"
+
+concurrency:
+  group: intelligence-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  E2E_FIXTURE_LIMIT: ${{ github.event.inputs.fixture_limit || '0' }}
+  E2E_WORKERS: "2"
+
+jobs:
+  e2e-plumbing:
+    name: E2E plumbing (UI loop, stub backend, no tokens)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync --frozen
+      - run: uv run playwright install --with-deps chromium
+      - name: Start compliance service (stub backend)
+        working-directory: .
+        run: |
+          uv sync --frozen
+          nohup uv run uvicorn app.main:app --port 8100 > /tmp/compliance.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8100/api/v1/health && exit 0; sleep 1;
+          done
+          echo "service failed to start"; cat /tmp/compliance.log; exit 1
+      - name: Plumbing suite (library + UI loop + fail-path)
+        env:
+          E2E_BASE_URL: http://localhost:8100
+          E2E_AUDITOR: fake
+        run: uv run pytest -q -m "not intelligence"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-plumbing-artifacts
+          path: e2e/e2e-artifacts/
+
+  intelligence-e2e:
+    name: Intelligence E2E (50+ invoices, AI-graded)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    defaults:
+      run:
+        working-directory: e2e
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require ANTHROPIC_API_KEY
+        run: |
+          if [ -z "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
+            echo "::error::ANTHROPIC_API_KEY secret is not configured. The intelligence gate cannot run — refusing to pass silently."
+            exit 1
+          fi
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync --frozen
+      - run: uv run playwright install --with-deps chromium
+      - name: Start compliance service (REAL agent)
+        working-directory: .
+        env:
+          COMPLIANCE_AUDIT_BACKEND: anthropic
+          COMPLIANCE_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          uv sync --frozen
+          nohup uv run uvicorn app.main:app --port 8100 > /tmp/compliance.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8100/api/v1/health && exit 0; sleep 1;
+          done
+          echo "service failed to start"; cat /tmp/compliance.log; exit 1
+      - name: Run the intelligence gate
+        env:
+          E2E_BASE_URL: http://localhost:8100
+          E2E_AUDITOR: anthropic
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: uv run pytest -m intelligence -n "$E2E_WORKERS" -q
+      - name: Upload run artifacts (scraped output, verdicts, screenshots)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: intelligence-artifacts
+          path: e2e/e2e-artifacts/
+      - name: Service log
+        if: failure()
+        run: tail -100 /tmp/compliance.log || true

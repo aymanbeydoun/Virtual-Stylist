@@ -44,8 +44,8 @@ def service_health(base_url: str) -> dict[str, Any]:
             return health
         time.sleep(1)
     pytest.fail(
-        f"Compliance service is not reachable at {base_url}. Start it first, e.g.\n"
-        "  cd services/compliance && uv run uvicorn app.main:app --port 8100"
+        f"Compliance service is not reachable at {base_url}. Start it first from "
+        "the service root: uv run uvicorn app.main:app --port 8100"
     )
 
 
