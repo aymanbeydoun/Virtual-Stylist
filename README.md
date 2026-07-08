@@ -18,6 +18,14 @@ staples that fill genuine gaps in the user's wardrobe.
 - [Database Schema](docs/SCHEMA.md) — entities, relationships, indexing
 - [MVP Roadmap](docs/ROADMAP.md) — 4-phase plan to a working iOS + Android prototype
 
+## Other Services in this Monorepo
+
+- [`services/compliance`](services/compliance/README.md) — **BFL Group Elite
+  Compliance & Audit AI Agent**: validates authenticity, sourcing legitimacy,
+  and chain of title of goods from sanitized invoice documentation. Buyers
+  drag-and-drop the deal documents (PDFs, Excel, photos) and get a
+  Green / Amber / Red risk signal with a full red-flag report.
+
 ## Status
 
 Pre-implementation. This branch holds the design blueprint that engineering

@@ -54,6 +54,20 @@ jobs:
           STORAGE_BACKEND: local
         run: uv run pytest -q tests/integration
 
+  compliance:
+    name: Compliance agent typecheck + tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/compliance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run mypy app
+      - run: uv run pytest -q
+
   mobile:
     name: Mobile typecheck + lint
     runs-on: ubuntu-latest

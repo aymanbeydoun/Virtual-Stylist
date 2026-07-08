@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BFL Compliance &amp; Audit Agent</title>
+<style>
+  :root {
+    --bg: #0f1418; --panel: #161d23; --panel-2: #1c242c; --line: #2a343d;
+    --ink: #e8edf2; --muted: #93a1ad; --faint: #5d6b76;
+    --green: #2fa36b; --amber: #d99a2b; --red: #d94f41; --blue: #4c8dc4;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); line-height: 1.5; }
+  header { border-bottom: 1px solid var(--line); padding: 22px 28px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  header h1 { font-size: 19px; margin: 0; letter-spacing: .4px; }
+  header h1 .tag { color: var(--amber); }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  main { display: grid; grid-template-columns: 400px 1fr; gap: 24px; padding: 24px 28px 60px; max-width: 1440px; margin: 0 auto; }
+  @media (max-width: 980px) { main { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+  .panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 1.4px; color: var(--muted); margin: 0 0 12px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+  input[type=text], textarea { width: 100%; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-family: var(--sans); font-size: 14px; }
+  textarea { resize: vertical; min-height: 56px; }
+  input:focus, textarea:focus { outline: none; border-color: var(--blue); }
+
+  #dropzone { margin-top: 16px; border: 1.5px dashed var(--faint); border-radius: 10px; padding: 26px 16px; text-align: center; color: var(--muted); cursor: pointer; transition: border-color .15s, background .15s; }
+  #dropzone.drag { border-color: var(--blue); background: rgba(76,141,196,.08); }
+  #dropzone strong { color: var(--ink); }
+  #dropzone .hint { font-size: 12px; color: var(--faint); margin-top: 6px; }
+
+  #filelist { list-style: none; margin: 12px 0 0; padding: 0; font-family: var(--mono); font-size: 12.5px; }
+  #filelist li { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 6px; background: var(--panel-2); }
+  #filelist .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #filelist .size { color: var(--faint); }
+  #filelist button { background: none; border: none; color: var(--red); cursor: pointer; font-size: 14px; padding: 0 2px; }
+
+  #runbtn { width: 100%; margin-top: 16px; padding: 12px; font-size: 15px; font-weight: 600; color: #0d1114; background: var(--amber); border: none; border-radius: 8px; cursor: pointer; }
+  #runbtn:hover:not(:disabled) { filter: brightness(1.08); }
+  #runbtn:disabled { opacity: .45; cursor: not-allowed; }
+  #status { margin-top: 10px; font-size: 13px; color: var(--muted); min-height: 18px; }
+  #status.err { color: var(--red); }
+
+  .checklist { margin-top: 20px; }
+  .checklist ol { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; }
+  .checklist li { margin-bottom: 4px; }
+  .checklist li::marker { color: var(--faint); }
+
+  /* ---- report ---- */
+  #placeholder { color: var(--faint); text-align: center; padding: 90px 20px; border: 1px dashed var(--line); border-radius: 10px; }
+  .lights { display: flex; gap: 10px; margin-bottom: 14px; }
+  .light { flex: 1; text-align: center; padding: 20px 10px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); opacity: .28; }
+  .light .dot { width: 26px; height: 26px; border-radius: 50%; margin: 0 auto 8px; }
+  .light.on { opacity: 1; border-width: 2px; }
+  .light.green .dot { background: var(--green); } .light.green.on { border-color: var(--green); box-shadow: 0 0 24px rgba(47,163,107,.25) inset; }
+  .light.amber .dot { background: var(--amber); } .light.amber.on { border-color: var(--amber); box-shadow: 0 0 24px rgba(217,154,43,.25) inset; }
+  .light.red .dot { background: var(--red); } .light.red.on { border-color: var(--red); box-shadow: 0 0 24px rgba(217,79,65,.25) inset; }
+  .light .word { font-weight: 700; letter-spacing: 1px; font-size: 13px; }
+  .light .meaning { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  #verdict { padding: 16px 18px; border-radius: 10px; margin-bottom: 22px; border: 1px solid var(--line); }
+  #verdict.GREEN { background: rgba(47,163,107,.12); border-color: var(--green); }
+  #verdict.AMBER { background: rgba(217,154,43,.12); border-color: var(--amber); }
+  #verdict.RED   { background: rgba(217,79,65,.12);  border-color: var(--red); }
+  #verdict .rating { font-size: 22px; font-weight: 800; letter-spacing: .5px; }
+  #verdict .guidance { color: var(--ink); margin-top: 4px; }
+  #verdict .rationale { color: var(--muted); margin-top: 8px; font-size: 13.5px; }
+
+  section.block { margin-bottom: 22px; }
+  section.block h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 1.4px; color: var(--muted); margin: 0 0 10px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  .flag { display: flex; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-left-width: 4px; border-radius: 6px; margin-bottom: 8px; background: var(--panel-2); font-size: 13.5px; }
+  .flag.critical { border-left-color: var(--red); } .flag.high { border-left-color: #e0713f; }
+  .flag.medium { border-left-color: var(--amber); } .flag.low { border-left-color: var(--blue); }
+  .flag .sev { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; padding: 2px 7px; border-radius: 4px; align-self: flex-start; margin-top: 2px; white-space: nowrap; }
+  .flag.critical .sev { background: rgba(217,79,65,.18); color: #ff8d81; }
+  .flag.high .sev { background: rgba(224,113,63,.18); color: #f4a179; }
+  .flag.medium .sev { background: rgba(217,154,43,.18); color: #eec06a; }
+  .flag.low .sev { background: rgba(76,141,196,.18); color: #8dbbe4; }
+  .flag .ev { color: var(--faint); font-size: 12.5px; margin-top: 4px; font-family: var(--mono); }
+
+  .step { border: 1px solid var(--line); border-radius: 6px; margin-bottom: 8px; background: var(--panel-2); }
+  .step summary { cursor: pointer; padding: 10px 12px; display: flex; align-items: center; gap: 10px; font-size: 13.5px; list-style: none; }
+  .step summary::-webkit-details-marker { display: none; }
+  .step .st { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
+  .st.pass { background: rgba(47,163,107,.16); color: #7fd0a7; }
+  .st.warning { background: rgba(217,154,43,.16); color: #eec06a; }
+  .st.fail { background: rgba(217,79,65,.16); color: #ff8d81; }
+  .st.not_testable { background: rgba(93,107,118,.2); color: var(--muted); }
+  .step ul { margin: 0; padding: 0 14px 12px 32px; color: var(--muted); font-size: 13px; }
+  .step ul li { margin-bottom: 4px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--faint); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.mono { font-family: var(--mono); font-size: 12.5px; }
+  .ok { color: var(--green); } .no { color: var(--red); }
+
+  .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 1180px) { .twocol { grid-template-columns: 1fr; } }
+  ul.plain { margin: 0; padding-left: 18px; font-size: 13.5px; }
+  ul.plain li { margin-bottom: 5px; }
+  ul.plain .why { color: var(--faint); font-size: 12.5px; }
+
+  #disclaimer { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; color: var(--muted); font-size: 12.5px; background: var(--panel-2); }
+  #disclaimer h4 { margin: 0 0 6px; font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--faint); }
+  .meta { color: var(--faint); font-size: 12px; font-family: var(--mono); margin-top: 14px; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--faint); border-top-color: var(--amber); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>BFL GROUP <span class="tag">/ ELITE COMPLIANCE &amp; AUDIT AGENT</span></h1>
+  <p>Authenticity · sourcing legitimacy · chain of title — independent verification for the Buying Team</p>
+</header>
+
+<main>
+  <div>
+    <div class="panel">
+      <h2>1 · Case Submission</h2>
+      <label for="case_reference">Case reference</label>
+      <input type="text" id="case_reference" placeholder="e.g. BFL-2026-0042">
+      <label for="vendor_name">Vendor (seller to BFL)</label>
+      <input type="text" id="vendor_name" placeholder="Legal name on the invoice">
+      <label for="brand">Brand under review</label>
+      <input type="text" id="brand" placeholder="e.g. brand of the goods">
+      <label for="product_category">Product category</label>
+      <input type="text" id="product_category" placeholder="e.g. apparel, watches, footwear">
+      <label for="notes">Buyer notes for the auditor</label>
+      <textarea id="notes" placeholder="Anything the agent should know (deal background, prior concerns…)"></textarea>
+
+      <div id="dropzone">
+        <strong>Drop documents here</strong> or click to browse<br>
+        <span class="hint">Invoices, chain-of-title invoices, packing lists, airway bills, Excel extracts, product photos.<br>PDF · XLSX · CSV · PNG · JPG · WebP · GIF — multiple files at once.</span>
+        <input type="file" id="fileinput" multiple hidden
+               accept=".pdf,.xlsx,.xlsm,.csv,.txt,.png,.jpg,.jpeg,.gif,.webp">
+      </div>
+      <ul id="filelist"></ul>
+
+      <button id="runbtn" disabled>Run Compliance Audit</button>
+      <div id="status"></div>
+    </div>
+
+    <div class="panel checklist">
+      <h2>Standard document requirements</h2>
+      <ol id="checklist"></ol>
+    </div>
+  </div>
+
+  <div>
+    <div id="placeholder" class="">
+      <p><strong>No audit yet.</strong></p>
+      <p>Submit the case documents on the left. The agent reads every page — including scans and photos — runs the 7-step validation protocol, and returns a Green / Amber / Red signal with every red flag it finds.</p>
+    </div>
+    <div id="report" hidden></div>
+  </div>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtSize = (n) => n >= 1048576 ? (n/1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n/1024)) + " KB";
+
+let files = [];
+
+fetch("/api/v1/checklist").then(r => r.json()).then(items => {
+  $("checklist").innerHTML = items.map(i => `<li><strong>${esc(i.name)}</strong></li>`).join("");
+}).catch(() => {});
+
+const dz = $("dropzone"), input = $("fileinput");
+dz.addEventListener("click", () => input.click());
+dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("drag"); });
+dz.addEventListener("dragleave", () => dz.classList.remove("drag"));
+dz.addEventListener("drop", e => {
+  e.preventDefault(); dz.classList.remove("drag");
+  addFiles([...e.dataTransfer.files]);
+});
+input.addEventListener("change", () => { addFiles([...input.files]); input.value = ""; });
+
+function addFiles(picked) {
+  for (const f of picked) {
+    if (!files.some(x => x.name === f.name && x.size === f.size)) files.push(f);
+  }
+  renderFiles();
+}
+function removeFile(i) { files.splice(i, 1); renderFiles(); }
+function renderFiles() {
+  $("filelist").innerHTML = files.map((f, i) =>
+    `<li><span class="name">${esc(f.name)}</span><span class="size">${fmtSize(f.size)}</span>` +
+    `<button title="Remove" data-i="${i}">✕</button></li>`).join("");
+  $("filelist").querySelectorAll("button").forEach(b =>
+    b.addEventListener("click", () => removeFile(Number(b.dataset.i))));
+  $("runbtn").disabled = files.length === 0;
+}
+
+$("runbtn").addEventListener("click", async () => {
+  const btn = $("runbtn"), status = $("status");
+  btn.disabled = true;
+  status.className = "";
+  status.innerHTML = `<span class="spinner"></span>Deep audit in progress — the agent is reading every page and testing the chain. This can take a few minutes.`;
+
+  const fd = new FormData();
+  for (const f of files) fd.append("files", f, f.name);
+  for (const k of ["case_reference", "vendor_name", "brand", "product_category", "notes"])
+    fd.append(k, $(k).value);
+
+  try {
+    const res = await fetch("/api/v1/audits", { method: "POST", body: fd });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = typeof body.detail === "string" ? body.detail : "The audit request was rejected.";
+      throw new Error(msg);
+    }
+    renderReport(body);
+    status.textContent = "";
+  } catch (err) {
+    status.className = "err";
+    status.textContent = err.message || "The audit failed. Check the service logs.";
+  } finally {
+    btn.disabled = files.length === 0;
+  }
+});
+
+function light(color, word, meaning, on) {
+  return `<div class="light ${color} ${on ? "on" : ""}"><div class="dot"></div>` +
+         `<div class="word">${word}</div><div class="meaning">${meaning}</div></div>`;
+}
+
+function renderReport(r) {
+  $("placeholder").hidden = true;
+  const el = $("report");
+  el.hidden = false;
+
+  const flags = [...r.red_flags].sort((a, b) => {
+    const order = { critical: 0, high: 1, medium: 2, low: 3 };
+    return order[a.severity] - order[b.severity];
+  });
+
+  el.innerHTML = `
+    <div class="lights">
+      ${light("green", "GREEN", "Proceed", r.signal === "GREEN")}
+      ${light("amber", "AMBER", "Discuss collectively & take a call", r.signal === "AMBER")}
+      ${light("red", "RED", "Cannot proceed", r.signal === "RED")}
+    </div>
+
+    <div id="verdict" class="${esc(r.signal)}">
+      <div class="rating">${esc(r.risk_rating)} RISK — ${esc(r.signal)}</div>
+      <div class="guidance">${esc(r.signal_guidance)}</div>
+      <div class="rationale">${esc(r.risk_rationale)}</div>
+    </div>
+
+    <section class="block">
+      <h3>Executive summary</h3>
+      <p style="margin:0; font-size:14px;">${esc(r.executive_summary)}</p>
+    </section>
+
+    <section class="block">
+      <h3>Red flags (${flags.length})</h3>
+      ${flags.length === 0 ? '<p style="color:var(--muted); font-size:13.5px; margin:0;">No red flags reported.</p>' : flags.map(f => `
+        <div class="flag ${esc(f.severity)}">
+          <span class="sev">${esc(f.severity)}</span>
+          <div>
+            <div><strong>${esc(f.category)}</strong> — ${esc(f.description)}</div>
+            <div class="ev">Evidence: ${esc(f.evidence)}</div>
+          </div>
+        </div>`).join("")}
+    </section>
+
+    <section class="block">
+      <h3>Sanitization integrity</h3>
+      <div class="step"><summary style="display:flex; padding:10px 12px; gap:10px; align-items:center;">
+        <span class="st ${esc(r.sanitization_check.status)}">${esc(r.sanitization_check.status.replace("_", " "))}</span>
+        <span style="font-size:13.5px;">Redaction check against the permitted / strictly-rejected lists</span>
+      </summary>
+      <ul>${r.sanitization_check.findings.map(f => `<li>${esc(f)}</li>`).join("")}</ul></div>
+    </section>
+
+    <section class="block">
+      <h3>Validation protocol — step results</h3>
+      ${r.steps.map(s => `
+        <details class="step" ${s.status === "fail" || s.status === "warning" ? "open" : ""}>
+          <summary><span class="st ${esc(s.status)}">${esc(s.status.replace("_", " "))}</span>
+            <span>Step ${s.step} — ${esc(s.title)}</span></summary>
+          <ul>${s.findings.map(f => `<li>${esc(f)}</li>`).join("")}</ul>
+        </details>`).join("")}
+    </section>
+
+    <section class="block">
+      <h3>Chain of title</h3>
+      ${r.chain_of_title.length === 0 ? '<p style="color:var(--muted); font-size:13.5px; margin:0;">No chain could be mapped from the documents provided.</p>' : `
+      <table><thead><tr><th>#</th><th>Entity</th><th>Role</th><th>Verified</th><th>Notes</th></tr></thead>
+      <tbody>${r.chain_of_title.map(c => `
+        <tr><td class="mono">${c.position}</td><td>${esc(c.entity)}</td><td>${esc(c.role)}</td>
+        <td>${c.verified ? '<span class="ok">✔ yes</span>' : '<span class="no">✘ no</span>'}</td>
+        <td style="color:var(--muted);">${esc(c.notes)}</td></tr>`).join("")}
+      </tbody></table>`}
+    </section>
+
+    <div class="twocol">
+      <section class="block">
+        <h3>Documents received</h3>
+        ${r.documents_received.length === 0 ? '<p style="color:var(--muted); font-size:13.5px; margin:0;">None recognized.</p>' :
+          `<ul class="plain">${r.documents_received.map(d => `<li>${esc(d)}</li>`).join("")}</ul>`}
+      </section>
+      <section class="block">
+        <h3>Requested but not received (${r.documents_missing.length})</h3>
+        ${r.documents_missing.length === 0 ? '<p style="color:var(--muted); font-size:13.5px; margin:0;">Standard document set is complete.</p>' :
+          `<ul class="plain">${r.documents_missing.map(d =>
+            `<li><strong>${esc(d.name)}</strong><div class="why">${esc(d.why_needed)}</div></li>`).join("")}</ul>`}
+      </section>
+    </div>
+
+    <section class="block">
+      <h3>Recommended actions</h3>
+      <ul class="plain">${r.recommended_actions.map(a => `<li>${esc(a)}</li>`).join("")}</ul>
+    </section>
+
+    <section class="block">
+      <h3>Documents analyzed</h3>
+      <table><thead><tr><th>File</th><th>Type</th><th>Size</th><th>Processing note</th></tr></thead>
+      <tbody>${r.documents_analyzed.map(d => `
+        <tr><td class="mono">${esc(d.filename)}</td><td>${esc(d.kind)}</td>
+        <td class="mono">${fmtSize(d.size_bytes)}</td><td style="color:var(--muted);">${esc(d.note)}</td></tr>`).join("")}
+      </tbody></table>
+      <div class="meta">case ${esc(r.case_reference || "—")} · vendor ${esc(r.vendor_name || "—")} · brand ${esc(r.brand || "—")} · category ${esc(r.product_category || "—")} · engine ${esc(r.model_id)}</div>
+    </section>
+
+    <div id="disclaimer">
+      <h4>Audit &amp; Compliance — standard disclaimer</h4>
+      ${esc(r.disclaimer)}
+    </div>`;
+
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+</script>
+</body>
+</html>
