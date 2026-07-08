@@ -1,0 +1,41 @@
+[project]
+name = "bfl-compliance-e2e"
+version = "0.1.0"
+description = "Playwright-to-LLM-assertion intelligence pipeline for the BFL Compliance Agent"
+requires-python = ">=3.12"
+dependencies = [
+    "playwright>=1.49",
+    "pytest>=8.3",
+    "pytest-xdist>=3.6",
+    "anthropic>=0.116",
+    "openpyxl>=3.1",
+    "pydantic>=2.9",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.7",
+    "mypy>=1.13",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = [
+    "intelligence: full AI-graded run over the 50+ invoice library (needs real backend + ANTHROPIC_API_KEY)",
+]

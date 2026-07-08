@@ -247,21 +247,21 @@ function renderReport(r) {
       ${light("red", "RED", "Cannot proceed", r.signal === "RED")}
     </div>
 
-    <div id="verdict" class="${esc(r.signal)}">
-      <div class="rating">${esc(r.risk_rating)} RISK — ${esc(r.signal)}</div>
-      <div class="guidance">${esc(r.signal_guidance)}</div>
-      <div class="rationale">${esc(r.risk_rationale)}</div>
+    <div id="verdict" data-testid="verdict" data-signal="${esc(r.signal)}" data-rating="${esc(r.risk_rating)}" class="${esc(r.signal)}">
+      <div class="rating" data-testid="rating">${esc(r.risk_rating)} RISK — ${esc(r.signal)}</div>
+      <div class="guidance" data-testid="guidance">${esc(r.signal_guidance)}</div>
+      <div class="rationale" data-testid="rationale">${esc(r.risk_rationale)}</div>
     </div>
 
-    <section class="block">
+    <section class="block" data-testid="executive-summary">
       <h3>Executive summary</h3>
       <p style="margin:0; font-size:14px;">${esc(r.executive_summary)}</p>
     </section>
 
-    <section class="block">
+    <section class="block" data-testid="red-flags">
       <h3>Red flags (${flags.length})</h3>
       ${flags.length === 0 ? '<p style="color:var(--muted); font-size:13.5px; margin:0;">No red flags reported.</p>' : flags.map(f => `
-        <div class="flag ${esc(f.severity)}">
+        <div class="flag ${esc(f.severity)}" data-testid="red-flag" data-severity="${esc(f.severity)}">
           <span class="sev">${esc(f.severity)}</span>
           <div>
             <div><strong>${esc(f.category)}</strong> — ${esc(f.description)}</div>
@@ -270,43 +270,43 @@ function renderReport(r) {
         </div>`).join("")}
     </section>
 
-    <section class="block">
+    <section class="block" data-testid="sanitization">
       <h3>Sanitization integrity</h3>
       <div class="step"><summary style="display:flex; padding:10px 12px; gap:10px; align-items:center;">
-        <span class="st ${esc(r.sanitization_check.status)}">${esc(r.sanitization_check.status.replace("_", " "))}</span>
+        <span class="st ${esc(r.sanitization_check.status)}" data-testid="sanitization-status">${esc(r.sanitization_check.status.replace("_", " "))}</span>
         <span style="font-size:13.5px;">Redaction check against the permitted / strictly-rejected lists</span>
       </summary>
       <ul>${r.sanitization_check.findings.map(f => `<li>${esc(f)}</li>`).join("")}</ul></div>
     </section>
 
-    <section class="block">
+    <section class="block" data-testid="steps">
       <h3>Validation protocol — step results</h3>
       ${r.steps.map(s => `
-        <details class="step" ${s.status === "fail" || s.status === "warning" ? "open" : ""}>
+        <details class="step" data-testid="step" data-status="${esc(s.status)}" ${s.status === "fail" || s.status === "warning" ? "open" : ""}>
           <summary><span class="st ${esc(s.status)}">${esc(s.status.replace("_", " "))}</span>
             <span>Step ${s.step} — ${esc(s.title)}</span></summary>
           <ul>${s.findings.map(f => `<li>${esc(f)}</li>`).join("")}</ul>
         </details>`).join("")}
     </section>
 
-    <section class="block">
+    <section class="block" data-testid="chain">
       <h3>Chain of title</h3>
       ${r.chain_of_title.length === 0 ? '<p style="color:var(--muted); font-size:13.5px; margin:0;">No chain could be mapped from the documents provided.</p>' : `
       <table><thead><tr><th>#</th><th>Entity</th><th>Role</th><th>Verified</th><th>Notes</th></tr></thead>
       <tbody>${r.chain_of_title.map(c => `
-        <tr><td class="mono">${c.position}</td><td>${esc(c.entity)}</td><td>${esc(c.role)}</td>
+        <tr data-testid="chain-row"><td class="mono">${c.position}</td><td>${esc(c.entity)}</td><td>${esc(c.role)}</td>
         <td>${c.verified ? '<span class="ok">✔ yes</span>' : '<span class="no">✘ no</span>'}</td>
         <td style="color:var(--muted);">${esc(c.notes)}</td></tr>`).join("")}
       </tbody></table>`}
     </section>
 
     <div class="twocol">
-      <section class="block">
+      <section class="block" data-testid="docs-received">
         <h3>Documents received</h3>
         ${r.documents_received.length === 0 ? '<p style="color:var(--muted); font-size:13.5px; margin:0;">None recognized.</p>' :
           `<ul class="plain">${r.documents_received.map(d => `<li>${esc(d)}</li>`).join("")}</ul>`}
       </section>
-      <section class="block">
+      <section class="block" data-testid="docs-missing">
         <h3>Requested but not received (${r.documents_missing.length})</h3>
         ${r.documents_missing.length === 0 ? '<p style="color:var(--muted); font-size:13.5px; margin:0;">Standard document set is complete.</p>' :
           `<ul class="plain">${r.documents_missing.map(d =>
@@ -314,7 +314,7 @@ function renderReport(r) {
       </section>
     </div>
 
-    <section class="block">
+    <section class="block" data-testid="actions">
       <h3>Recommended actions</h3>
       <ul class="plain">${r.recommended_actions.map(a => `<li>${esc(a)}</li>`).join("")}</ul>
     </section>
@@ -329,9 +329,9 @@ function renderReport(r) {
       <div class="meta">case ${esc(r.case_reference || "—")} · vendor ${esc(r.vendor_name || "—")} · brand ${esc(r.brand || "—")} · category ${esc(r.product_category || "—")} · engine ${esc(r.model_id)}</div>
     </section>
 
-    <div id="disclaimer">
+    <div id="disclaimer" data-testid="disclaimer">
       <h4>Audit &amp; Compliance — standard disclaimer</h4>
-      ${esc(r.disclaimer)}
+      <span data-testid="disclaimer-text">${esc(r.disclaimer)}</span>
     </div>`;
 
   el.scrollIntoView({ behavior: "smooth", block: "start" });

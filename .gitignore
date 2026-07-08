@@ -45,3 +45,4 @@ logs/
 
 # Local artifacts
 storage/
+e2e-artifacts/
