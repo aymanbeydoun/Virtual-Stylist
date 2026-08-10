@@ -1,7 +1,9 @@
 import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
+import { setAudioModeAsync, useAudioPlayer } from "expo-audio";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Image } from "expo-image";
-import { useRef, useState } from "react";
+import * as ImagePicker from "expo-image-picker";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -12,13 +14,18 @@ import Animated, {
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle, Path } from "react-native-svg";
 
+import tickSound from "../../../assets/sounds/tick.wav";
+import shutterSound from "../../../assets/sounds/shutter.wav";
 import { GarmentIcon } from "@/components/GarmentIcon";
-import { CloseIcon, FlipIcon, Rotate360Icon } from "@/components/icons";
+import { CloseIcon, FlipIcon, GalleryIcon, Rotate360Icon } from "@/components/icons";
 import { DEMO_CLOSET, type DemoItem, type DemoSlot } from "@/data/demoCloset";
-import { hapticPress, hapticSuccess } from "@/lib/haptics";
+import { hapticPress, hapticSelect, hapticSuccess } from "@/lib/haptics";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useAccent } from "@/state/theme";
 import { fonts, palette, radii, spacing } from "@/theme";
+
+const TIMER_OPTIONS = [0, 3, 5, 10] as const;
+type TimerSeconds = (typeof TIMER_OPTIONS)[number];
 
 /**
  * THE FITTING ROOM — STaiLE ME's spatial try-on.
@@ -85,7 +92,44 @@ export function FittingRoomScreen() {
   const [facing, setFacing] = useState<"back" | "front">("back");
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [timer, setTimer] = useState<TimerSeconds>(0);
+  const [countdown, setCountdown] = useState<number | null>(null);
   const cameraRef = useRef<CameraView>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Countdown ticks and the shutter chime are distinct sounds; play through
+  // the iOS silent switch so the timer is audible from across the room.
+  const tickPlayer = useAudioPlayer(tickSound);
+  const shutterPlayer = useAudioPlayer(shutterSound);
+  useEffect(() => {
+    setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, []);
+
+  const playTick = () => {
+    try {
+      tickPlayer.seekTo(0);
+      tickPlayer.play();
+    } catch {
+      // Sound is a nice-to-have — never block the countdown on audio.
+    }
+  };
+  const playShutter = () => {
+    try {
+      shutterPlayer.seekTo(0);
+      shutterPlayer.play();
+    } catch {
+      // Sound is a nice-to-have — never block the capture on audio.
+    }
+  };
+
+  const cancelCountdown = () => {
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    countdownRef.current = null;
+    setCountdown(null);
+  };
 
   const items: DemoItem[] = route.params.itemIds
     .map((id) => DEMO_CLOSET.find((i) => i.id === id))
@@ -107,6 +151,7 @@ export function FittingRoomScreen() {
   const capture = async () => {
     if (busy || !cameraRef.current) return;
     setBusy(true);
+    playShutter();
     hapticPress();
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
@@ -120,6 +165,56 @@ export function FittingRoomScreen() {
       // Camera hiccup — stay in align phase so the user can retry.
     } finally {
       setBusy(false);
+    }
+  };
+
+  /** Shutter press: instant snap, or run the self-timer with a tick per second. */
+  const onShutterPress = () => {
+    if (busy) return;
+    if (countdown !== null) {
+      cancelCountdown();
+      return;
+    }
+    if (timer === 0) {
+      capture();
+      return;
+    }
+    let n = timer;
+    setCountdown(n);
+    playTick();
+    hapticSelect();
+    countdownRef.current = setInterval(() => {
+      n -= 1;
+      if (n <= 0) {
+        cancelCountdown();
+        capture();
+      } else {
+        setCountdown(n);
+        playTick();
+        hapticSelect();
+      }
+    }, 1000);
+  };
+
+  /** Import a full-body photo from the camera roll instead of shooting one. */
+  const pickFromLibrary = async () => {
+    if (busy || countdown !== null) return;
+    hapticSelect();
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.9,
+      });
+      const asset = result.assets?.[0];
+      if (!result.canceled && asset?.uri) {
+        playShutter();
+        setPhotoUri(asset.uri);
+        setPhase("fitted");
+        rotY.value = 0;
+        hapticSuccess();
+      }
+    } catch {
+      // Picker dismissed or unavailable — stay in align phase.
     }
   };
 
@@ -184,6 +279,12 @@ export function FittingRoomScreen() {
               <Text style={styles.instruction}>ALIGN FULL-BODY PROFILE</Text>
               <Text style={[styles.instruction, styles.instructionDim]}>ENSURE CLEAR LIGHTING</Text>
             </View>
+            {countdown !== null && (
+              <View style={styles.countdownWrap} pointerEvents="none">
+                <Text style={[styles.countdownText, { color: accent }]}>{countdown}</Text>
+                <Text style={styles.instruction}>GET IN POSITION</Text>
+              </View>
+            )}
           </>
         ) : (
           <GestureDetector gesture={spin}>
@@ -223,14 +324,52 @@ export function FittingRoomScreen() {
       {/* Bottom controls */}
       <View style={styles.controls}>
         {phase === "align" ? (
-          <Pressable
-            style={[styles.shutter, { borderColor: accent }, busy && { opacity: 0.4 }]}
-            onPress={capture}
-            disabled={busy}
-            accessibilityLabel="Capture"
-          >
-            <View style={[styles.shutterCore, { backgroundColor: accent }]} />
-          </Pressable>
+          <>
+            {/* Self-timer — ticks every second so you have time to pose. */}
+            <View style={styles.timerRow}>
+              {TIMER_OPTIONS.map((t) => (
+                <Pressable
+                  key={t}
+                  style={[styles.timerChip, timer === t && { borderColor: accent }]}
+                  disabled={countdown !== null}
+                  onPress={() => {
+                    hapticSelect();
+                    setTimer(t);
+                  }}
+                >
+                  <Text style={[styles.timerChipText, timer === t && { color: accent }]}>
+                    {t === 0 ? "OFF" : `${t}S`}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={styles.shutterRow}>
+              <Pressable
+                style={styles.iconBtn}
+                onPress={pickFromLibrary}
+                accessibilityLabel="Choose a photo from your library"
+              >
+                <GalleryIcon size={17} />
+              </Pressable>
+              <Pressable
+                style={[styles.shutter, { borderColor: accent }, busy && { opacity: 0.4 }]}
+                onPress={onShutterPress}
+                disabled={busy}
+                accessibilityLabel={countdown !== null ? "Cancel timer" : "Capture"}
+              >
+                {countdown !== null ? (
+                  <View style={styles.shutterCancel}>
+                    <CloseIcon size={22} color={accent} />
+                  </View>
+                ) : (
+                  <View style={[styles.shutterCore, { backgroundColor: accent }]} />
+                )}
+              </Pressable>
+              <View style={[styles.iconBtn, { opacity: 0 }]} pointerEvents="none">
+                <GalleryIcon size={17} />
+              </View>
+            </View>
+          </>
         ) : (
           <View style={styles.fittedRow}>
             <Pressable style={styles.ghostBtn} onPress={() => setPhase("align")}>
@@ -309,7 +448,39 @@ const styles = StyleSheet.create({
     paddingVertical: spacing(4),
     paddingHorizontal: spacing(5),
     alignItems: "center",
+    gap: spacing(4),
   },
+  timerRow: { flexDirection: "row", gap: spacing(2) },
+  timerChip: {
+    borderWidth: 1.5,
+    borderColor: palette.hairline,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing(3.5),
+    paddingVertical: spacing(1.5),
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  timerChipText: {
+    color: palette.textMuted,
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.5,
+  },
+  shutterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+    paddingHorizontal: spacing(6),
+  },
+  countdownWrap: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(5,5,5,0.35)",
+    gap: spacing(2),
+  },
+  countdownText: { fontFamily: fonts.display, fontSize: 120, lineHeight: 130 },
+  shutterCancel: { alignItems: "center", justifyContent: "center" },
   shutter: {
     width: 72,
     height: 72,
