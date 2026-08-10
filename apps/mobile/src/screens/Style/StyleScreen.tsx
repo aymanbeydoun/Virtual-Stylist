@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { personalizeRationales } from "@/ai/stylistBrain";
-import { ChevronIcon, PenIcon } from "@/components/icons";
+import { ChevronIcon, PenIcon, Rotate360Icon } from "@/components/icons";
 import { KineticTitle } from "@/components/KineticTitle";
 import { LevelBadge } from "@/components/LevelBadge";
 import { OutfitCanvas } from "@/components/OutfitCanvas";
@@ -200,6 +200,9 @@ export function StyleScreen() {
                 aiName={aiName}
                 accent={accent}
                 onEditName={() => setRenameOpen(true)}
+                onTryOn={(tryItems) =>
+                  nav.navigate("FittingRoom", { itemIds: tryItems.map((i) => i.id) })
+                }
                 onChat={() =>
                   nav.navigate("StylistChat", {
                     outfitId: o.id,
@@ -263,6 +266,7 @@ function OutfitCard({
   accent,
   onChat,
   onEditName,
+  onTryOn,
 }: {
   outfit: DemoOutfit;
   index: number;
@@ -271,6 +275,7 @@ function OutfitCard({
   accent: string;
   onChat: () => void;
   onEditName: () => void;
+  onTryOn: (items: DemoItem[]) => void;
 }) {
   const [rating, setRating] = useState<number | null>(null);
   // Live layer state — flick-to-swap replaces single pieces on the canvas.
@@ -319,12 +324,19 @@ function OutfitCard({
         </View>
       </View>
 
-      {/* Stella anchor + rename */}
+      {/* Stella anchor + fitting room + rename */}
       <View style={styles.chatRow}>
         <Pressable style={styles.chatBtn} onPress={onChat}>
           <StellaOrb size={30} color={accent} />
           <Text style={styles.chatBtnText}>CHAT TO {aiName.toUpperCase()}</Text>
           <ChevronIcon size={15} color={palette.textMuted} />
+        </Pressable>
+        <Pressable
+          style={[styles.penBtn, { borderColor: accent }]}
+          onPress={() => onTryOn(items)}
+          accessibilityLabel="Try this outfit on in the fitting room"
+        >
+          <Rotate360Icon size={18} color={accent} />
         </Pressable>
         <Pressable
           style={styles.penBtn}

@@ -216,3 +216,43 @@ export function GalleryIcon({ size = 18, color = "#F5F6F7", strokeWidth = 1.8 }:
     </Svg>
   );
 }
+
+/** Close (X). */
+export function CloseIcon({ size = 18, color = "#F5F6F7", strokeWidth = 2 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M6 6l12 12M18 6L6 18" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** Camera flip — two curved arrows. */
+export function FlipIcon({ size = 18, color = "#F5F6F7", strokeWidth = 1.8 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M4 9a8 8 0 0 1 14-2.5M20 15a8 8 0 0 1-14 2.5"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+      <Path d="M18 3v4h-4M6 21v-4h4" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+/** Geometric 360° rotation indicator. */
+export function Rotate360Icon({ size = 20, color = "#F5F6F7", strokeWidth = 1.7 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 5c5.5 0 9 2.2 9 5s-3.5 5-9 5-9-2.2-9-5c0-1.9 1.6-3.5 4.3-4.4"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+      <Path d="M3.8 12.6 3 15.6l3-.7" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+      <Circle cx={12} cy={10} r={1.4} fill={color} />
+    </Svg>
+  );
+}
